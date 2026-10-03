@@ -1,15 +1,17 @@
 "use client";
 
-// Layout + role guard for every portal page. If nobody is logged in, or the
-// logged-in user has a different role, go back to the login page.
-// (This is only UX — the backend enforces roles on every request.)
+// Layout + role guard for every portal: sidebar (desktop) / slide-in menu (mobile),
+// top bar with page title and theme toggle, and the roadmap card at the bottom.
+// The role check here is only UX: the backend enforces roles on every request.
 
+import { GraduationCap, LogOut, Menu, X } from "lucide-react";
 import { useRouter } from "next/navigation";
 import { useEffect, useState, type ReactNode } from "react";
 
-import { ROADMAP } from "@/lib/features";
+import { NAV, ROADMAP } from "@/lib/features";
 import { clearUser, getUser, type Role, type SessionUser } from "@/lib/session";
-import { Card } from "./ui";
+import { ThemeToggle } from "./ThemeToggle";
+import { Avatar, Card, ROLE_STYLE } from "./ui";
 
 const TITLES: Record<Role, string> = {
   student: "Student portal",
@@ -18,9 +20,63 @@ const TITLES: Record<Role, string> = {
   support: "Support portal",
 };
 
+function Brand() {
+  return (
+    <div className="flex items-center gap-2.5">
+      <span className="flex h-9 w-9 items-center justify-center rounded-xl bg-brand text-brand-fg">
+        <GraduationCap className="h-5 w-5" />
+      </span>
+      <div className="leading-tight">
+        <p className="font-display text-sm font-bold text-fg">LMS GenAI</p>
+        <p className="text-xs text-muted">Learning assistant</p>
+      </div>
+    </div>
+  );
+}
+
+function Sidebar({ role, user, onLogout }: { role: Role; user: SessionUser; onLogout: () => void }) {
+  return (
+    <div className="flex h-full flex-col gap-6 p-4">
+      <Brand />
+      <nav className="flex-1 space-y-1">
+        {NAV[role].map(({ label, icon: Icon, phase }) => {
+          const active = !phase;
+          return (
+            <div
+              key={label}
+              aria-disabled={!active}
+              title={phase ? `Arrives in Phase ${phase}` : undefined}
+              className={`flex items-center gap-3 rounded-xl px-3 py-2 text-sm ${
+                active ? "bg-brand-soft font-medium text-brand-ink" : "cursor-not-allowed text-faint"
+              }`}
+            >
+              <Icon className="h-4 w-4" />
+              <span className="flex-1">{label}</span>
+              {phase && <span className="rounded-md bg-surface-2 px-1.5 py-0.5 font-mono text-[10px]">P{phase}</span>}
+            </div>
+          );
+        })}
+      </nav>
+      <div className="rounded-xl border border-line bg-surface-2/60 p-3">
+        <div className="flex items-center gap-3">
+          <Avatar name={user.full_name} role={role} size="sm" />
+          <div className="min-w-0 flex-1">
+            <p className="truncate text-sm font-medium text-fg">{user.full_name}</p>
+            <p className={`text-xs capitalize ${ROLE_STYLE[role].text}`}>{role}</p>
+          </div>
+          <button onClick={onLogout} title="Log out" className="rounded-lg p-1.5 text-muted hover:bg-surface hover:text-fg">
+            <LogOut className="h-4 w-4" />
+          </button>
+        </div>
+      </div>
+    </div>
+  );
+}
+
 export function PortalShell({ role, children }: { role: Role; children: (user: SessionUser) => ReactNode }) {
   const router = useRouter();
   const [user, setUserState] = useState<SessionUser | null>(null);
+  const [menuOpen, setMenuOpen] = useState(false);
 
   useEffect(() => {
     const current = getUser();
@@ -30,40 +86,65 @@ export function PortalShell({ role, children }: { role: Role; children: (user: S
 
   if (!user) return null;
 
+  const logout = () => {
+    clearUser();
+    router.replace("/");
+  };
+
   return (
-    <div className="min-h-screen bg-slate-100">
-      <header className="border-b border-slate-200 bg-white">
-        <div className="mx-auto flex max-w-6xl items-center justify-between px-4 py-3">
-          <div>
-            <p className="text-xs font-medium uppercase tracking-wide text-indigo-600">LMS GenAI</p>
-            <h1 className="text-lg font-semibold text-slate-900">{TITLES[role]}</h1>
-          </div>
-          <div className="flex items-center gap-4">
-            <div className="text-right text-sm">
-              <p className="font-medium text-slate-900">{user.full_name}</p>
-              <p className="text-slate-500">{user.email}</p>
-            </div>
+    <div className="min-h-screen lg:pl-64">
+      {/* Desktop sidebar */}
+      <aside className="fixed inset-y-0 left-0 hidden w-64 border-r border-line bg-surface lg:block">
+        <Sidebar role={role} user={user} onLogout={logout} />
+      </aside>
+
+      {/* Mobile slide-in menu */}
+      {menuOpen && (
+        <div className="fixed inset-0 z-40 lg:hidden">
+          <div className="absolute inset-0 bg-black/40" onClick={() => setMenuOpen(false)} />
+          <aside className="absolute inset-y-0 left-0 w-72 border-r border-line bg-surface">
             <button
-              onClick={() => {
-                clearUser();
-                router.replace("/");
-              }}
-              className="rounded-lg border border-slate-300 px-3 py-1.5 text-sm text-slate-700 hover:bg-slate-50"
+              onClick={() => setMenuOpen(false)}
+              className="absolute right-3 top-4 rounded-lg p-1.5 text-muted hover:bg-surface-2"
+              aria-label="Close menu"
             >
-              Log out
+              <X className="h-5 w-5" />
             </button>
+            <Sidebar role={role} user={user} onLogout={logout} />
+          </aside>
+        </div>
+      )}
+
+      <header className="sticky top-0 z-30 border-b border-line bg-bg/80 backdrop-blur">
+        <div className="mx-auto flex max-w-6xl items-center justify-between gap-3 px-4 py-3 sm:px-6">
+          <div className="flex items-center gap-3">
+            <button
+              onClick={() => setMenuOpen(true)}
+              className="rounded-lg p-1.5 text-muted hover:bg-surface-2 lg:hidden"
+              aria-label="Open menu"
+            >
+              <Menu className="h-5 w-5" />
+            </button>
+            <div>
+              <h1 className="font-display text-lg font-bold text-fg">{TITLES[role]}</h1>
+              <p className="hidden text-xs text-muted sm:block">Welcome back, {user.full_name.split(" ")[0]}</p>
+            </div>
           </div>
+          <ThemeToggle />
         </div>
       </header>
-      <main className="mx-auto grid max-w-6xl gap-4 px-4 py-6">
+
+      <main className="mx-auto grid max-w-6xl gap-5 px-4 py-6 sm:px-6">
         {children(user)}
         <Card title="Coming next" subtitle="Core features of this portal and the phase that builds them">
-          <ul className="grid gap-2 sm:grid-cols-2">
+          <ul className="grid gap-x-6 gap-y-2.5 sm:grid-cols-2">
             {ROADMAP[role].map((f) => (
-              <li key={f.id} className="flex items-center gap-2 text-sm text-slate-700">
-                <span className="rounded bg-slate-100 px-1.5 py-0.5 font-mono text-xs text-slate-500">{f.id}</span>
+              <li key={f.id} className="flex items-center gap-2.5 text-sm text-fg">
+                <span className="w-9 shrink-0 font-mono text-xs text-faint">{f.id}</span>
                 <span className="flex-1">{f.name}</span>
-                <span className="rounded-full bg-indigo-50 px-2 py-0.5 text-xs text-indigo-700">Phase {f.phase}</span>
+                <span className="rounded-full bg-brand-soft px-2 py-0.5 text-xs font-medium text-brand-ink">
+                  Phase {f.phase}
+                </span>
               </li>
             ))}
           </ul>

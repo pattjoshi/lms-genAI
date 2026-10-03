@@ -3,10 +3,11 @@
 // Same request from every portal: "list all students". The backend answers
 // differently per role — the permission matrix in action.
 
+import { ShieldCheck } from "lucide-react";
 import { useState } from "react";
 
 import { apiFetch, ApiError } from "@/lib/api";
-import { Card, ErrorBox } from "./ui";
+import { Alert, Button, Card, Chip } from "./ui";
 
 type StudentList = {
   scope: string;
@@ -14,49 +15,67 @@ type StudentList = {
   students: { id: number; full_name: string; email: string; city: string }[];
 };
 
+const EXPECTED = [
+  ["Student", "refused"],
+  ["Teacher", "own course only"],
+  ["Admin", "everyone"],
+  ["Support", "refused until tickets"],
+];
+
 export function PermissionTestCard() {
   const [data, setData] = useState<StudentList | null>(null);
   const [error, setError] = useState<ApiError | null>(null);
+  const [busy, setBusy] = useState(false);
 
   async function run() {
+    setBusy(true);
     setError(null);
     setData(null);
     try {
       setData(await apiFetch<StudentList>("/data/students?limit=10"));
     } catch (e) {
       setError(e instanceof ApiError ? e : new ApiError(0, "unknown", String(e)));
+    } finally {
+      setBusy(false);
     }
   }
 
   return (
     <Card
       title="Permission test: “list all students”"
-      subtitle="Student → refused · Teacher → only own course's students · Admin → everyone · Support → refused until tickets exist"
+      subtitle="Same request from every portal, different answer per role"
+      icon={<ShieldCheck className="h-4 w-4" />}
+      action={
+        <Button variant="ghost" onClick={run} disabled={busy}>
+          {busy ? "Running…" : "Run request"}
+        </Button>
+      }
     >
-      <button
-        onClick={run}
-        className="rounded-lg border border-slate-300 px-3 py-1.5 text-sm text-slate-700 hover:bg-slate-50"
-      >
-        Run request
-      </button>
+      <div className="flex flex-wrap gap-1.5">
+        {EXPECTED.map(([role, result]) => (
+          <Chip key={role}>
+            <span className="font-medium text-fg">{role}</span> → {result}
+          </Chip>
+        ))}
+      </div>
 
       {error && (
-        <div className="mt-3">
-          <ErrorBox message={`HTTP ${error.status}: ${error.message}`} />
+        <div className="mt-4">
+          <Alert title={`HTTP ${error.status}: ${error.message}`} />
         </div>
       )}
 
       {data && (
-        <div className="mt-3 text-sm">
-          <p className="text-slate-600">
-            Scope <code className="rounded bg-slate-100 px-1">{data.scope}</code> · {data.total} students (showing{" "}
-            {data.students.length})
-          </p>
-          <ul className="mt-2 divide-y divide-slate-100">
+        <div className="mt-4">
+          <Alert
+            tone="ok"
+            title={`Allowed with scope “${data.scope}”: ${data.total} students (showing ${data.students.length})`}
+          />
+          <ul className="mt-3 divide-y divide-line">
             {data.students.map((s) => (
-              <li key={s.id} className="flex justify-between py-1.5">
-                <span className="text-slate-800">{s.full_name}</span>
-                <span className="text-slate-500">{s.city}</span>
+              <li key={s.id} className="flex justify-between gap-3 py-2 text-sm">
+                <span className="text-fg">{s.full_name}</span>
+                <span className="text-muted">{s.city}</span>
               </li>
             ))}
           </ul>

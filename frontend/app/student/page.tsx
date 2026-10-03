@@ -1,9 +1,11 @@
 "use client";
 
+import { BookOpen, TrendingDown } from "lucide-react";
+
 import { AiHelloCard } from "@/components/AiHelloCard";
 import { PermissionTestCard } from "@/components/PermissionTestCard";
 import { PortalShell } from "@/components/PortalShell";
-import { Card, ErrorBox, Loading } from "@/components/ui";
+import { Alert, Card, EmptyState, ProgressBar, ScoreText, SkeletonCard } from "@/components/ui";
 import { useApi } from "@/components/useApi";
 
 type Summary = {
@@ -11,39 +13,69 @@ type Summary = {
   weakest_topics: { topic: string; course: string; avg_score: number }[];
 };
 
+const STATUS_STYLE: Record<string, string> = {
+  active: "bg-brand-soft text-brand-ink",
+  completed: "bg-ok-soft text-ok",
+  dropped: "bg-surface-2 text-muted",
+};
+
 function StudentHome() {
   const { data, error } = useApi<Summary>("/portal/student/summary");
-  if (error) return <ErrorBox message={error.message} detail={error.detail} />;
-  if (!data) return <Loading />;
+  if (error) return <Alert title={error.message} detail={error.detail} />;
+  if (!data)
+    return (
+      <div className="grid gap-5 md:grid-cols-2">
+        <SkeletonCard />
+        <SkeletonCard />
+      </div>
+    );
 
   return (
-    <div className="grid gap-4 md:grid-cols-2">
-      <Card title="My courses">
-        <ul className="space-y-3">
-          {data.courses.map((c) => (
-            <li key={c.code}>
-              <div className="flex justify-between text-sm">
-                <span className="font-medium">{c.title}</span>
-                <span className="text-slate-500">{c.status}</span>
-              </div>
-              <div className="mt-1 h-2 rounded-full bg-slate-100">
-                <div className="h-2 rounded-full bg-indigo-500" style={{ width: `${c.progress_pct}%` }} />
-              </div>
-            </li>
-          ))}
-        </ul>
+    <div className="grid gap-5 md:grid-cols-2">
+      <Card title="My courses" icon={<BookOpen className="h-4 w-4" />}>
+        {data.courses.length === 0 ? (
+          <EmptyState title="No courses yet" />
+        ) : (
+          <ul className="space-y-4">
+            {data.courses.map((c) => (
+              <li key={c.code}>
+                <div className="mb-1.5 flex items-center justify-between gap-2 text-sm">
+                  <span className="font-medium text-fg">{c.title}</span>
+                  <span className={`rounded-full px-2 py-0.5 text-xs capitalize ${STATUS_STYLE[c.status] ?? ""}`}>
+                    {c.status}
+                  </span>
+                </div>
+                <div className="flex items-center gap-3">
+                  <div className="flex-1">
+                    <ProgressBar value={c.progress_pct} tone={c.status === "completed" ? "bg-ok" : "bg-brand"} />
+                  </div>
+                  <span className="w-10 text-right font-mono text-xs text-muted">{c.progress_pct}%</span>
+                </div>
+              </li>
+            ))}
+          </ul>
+        )}
       </Card>
-      <Card title="My weakest topics" subtitle="From my quiz scores. Phase 4 turns this into the assistant's memory.">
-        <ul className="space-y-2 text-sm">
-          {data.weakest_topics.map((t) => (
-            <li key={t.topic} className="flex justify-between">
-              <span>
-                {t.topic} <span className="text-slate-400">· {t.course}</span>
-              </span>
-              <span className={t.avg_score < 50 ? "font-medium text-red-600" : "text-slate-600"}>{t.avg_score}%</span>
-            </li>
-          ))}
-        </ul>
+
+      <Card
+        title="My weakest topics"
+        subtitle="From my quiz scores. Phase 4 turns this into the assistant's memory."
+        icon={<TrendingDown className="h-4 w-4" />}
+      >
+        {data.weakest_topics.length === 0 ? (
+          <EmptyState title="No quiz attempts yet" />
+        ) : (
+          <ul className="divide-y divide-line">
+            {data.weakest_topics.map((t) => (
+              <li key={t.topic} className="flex items-center justify-between py-2.5 text-sm">
+                <span className="text-fg">
+                  {t.topic} <span className="font-mono text-xs text-faint">{t.course}</span>
+                </span>
+                <ScoreText score={t.avg_score} />
+              </li>
+            ))}
+          </ul>
+        )}
       </Card>
     </div>
   );

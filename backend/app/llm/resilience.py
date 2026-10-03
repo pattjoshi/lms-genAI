@@ -125,8 +125,9 @@ async def call_with_retry[T](
 
             if attempt > max_retries:
                 log.error("LLM call still failing after %d attempts (%s): %s", attempt, info.code, detail)
+                tries = f"{attempt} time" + ("s" if attempt != 1 else "")
                 raise LLMUnavailableError(
-                    f"{info.user_message} Tried {attempt} times. Please try again in a minute.",
+                    f"{info.user_message} Tried {tries}. Please try again in a minute.",
                     code=info.code,
                     detail=detail,
                     attempts=attempt,

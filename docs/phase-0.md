@@ -185,3 +185,7 @@ Restart uvicorn after every `.env` change (Ctrl+C, then run it again).
 Generate realistic course files (PDF, DOCX, HTML, TXT) for the 6 courses; parse → chunk →
 embed → store in Qdrant with tags; answer a student's doubt with a streamed, grounded
 answer; start the 20-question eval set.
+
+---
+
+Preparing for interviews? See [interview/phase-0.md](interview/phase-0.md): every decision in this phase with 2 alternatives, likely cross-questions and real-world examples.

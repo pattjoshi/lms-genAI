@@ -1,6 +1,50 @@
-// Core (⭐) features from PLAN.md, shown as a roadmap on each portal.
+// Sidebar items and the roadmap of core (⭐) features from PLAN.md.
+
+import {
+  BookOpen,
+  ChartColumn,
+  Dumbbell,
+  Gauge,
+  Inbox,
+  LayoutDashboard,
+  ListChecks,
+  MessageCircleQuestion,
+  Network,
+  Route,
+  Ticket,
+  Upload,
+  type LucideIcon,
+} from "lucide-react";
 
 import type { Role } from "./session";
+
+export type NavItem = { label: string; icon: LucideIcon; phase?: number }; // phase = not built yet
+
+export const NAV: Record<Role, NavItem[]> = {
+  student: [
+    { label: "Dashboard", icon: LayoutDashboard },
+    { label: "Ask a doubt", icon: MessageCircleQuestion, phase: 1 },
+    { label: "Learning path", icon: Route, phase: 3 },
+    { label: "Practice", icon: Dumbbell, phase: 4 },
+    { label: "My tickets", icon: Ticket, phase: 5 },
+  ],
+  teacher: [
+    { label: "Dashboard", icon: LayoutDashboard },
+    { label: "Course files", icon: Upload, phase: 1 },
+    { label: "Concept graph", icon: Network, phase: 3 },
+    { label: "Quizzes", icon: ListChecks, phase: 3 },
+    { label: "Doubt insights", icon: BookOpen, phase: 5 },
+  ],
+  support: [
+    { label: "Dashboard", icon: LayoutDashboard },
+    { label: "Ticket queue", icon: Inbox, phase: 5 },
+  ],
+  admin: [
+    { label: "Dashboard", icon: LayoutDashboard },
+    { label: "Ask the data", icon: ChartColumn, phase: 6 },
+    { label: "AI quality & cost", icon: Gauge, phase: 7 },
+  ],
+};
 
 export type Feature = { id: string; name: string; phase: number };
 

@@ -1,5 +1,142 @@
 @import "tailwindcss";
 
+/* Dark mode is driven by a class on <html> (set before first paint in layout.tsx),
+   so the user's Light / Dark / System choice wins over the OS setting. */
+@custom-variant dark (&:where(.dark, .dark *));
+
+/* ---------------------------------------------------------------------------
+   Design tokens. Every colour in the app comes from here; dark mode only
+   swaps these values. Components use the Tailwind names in @theme below
+   (bg-surface, text-muted, bg-brand, text-student ...), never raw hex.
+   --------------------------------------------------------------------------- */
+:root {
+  --bg: #f5f6fb;
+  --surface: #ffffff;
+  --surface-2: #f0f2f8;
+  --line: #e2e5ef;
+  --text: #0f1424;
+  --muted: #5a6378;
+  --faint: #8b93a7;
+
+  --brand: #5850ec;
+  --brand-hover: #4a41d9;
+  --brand-fg: #ffffff;
+  --brand-soft: #eef0ff;
+  --brand-ink: #3f37c9;
+
+  --ok: #047857;
+  --ok-soft: #e6f7ef;
+  --warn: #b45309;
+  --warn-soft: #fff4e2;
+  --bad: #c81e1e;
+  --bad-soft: #fdecec;
+
+  --student: #0369a1;
+  --student-soft: #e3f3fc;
+  --teacher: #047857;
+  --teacher-soft: #e3f6ee;
+  --admin: #6d28d9;
+  --admin-soft: #f1eafe;
+  --support: #b45309;
+  --support-soft: #fff1dd;
+
+  --ring: rgba(88, 80, 236, 0.35);
+  --shadow: 0 1px 2px rgba(15, 20, 36, 0.04), 0 4px 16px rgba(15, 20, 36, 0.04);
+}
+
+.dark {
+  --bg: #0a0c13;
+  --surface: #12151f;
+  --surface-2: #1a1e2b;
+  --line: #272c3c;
+  --text: #e8eaf2;
+  --muted: #9ba3b8;
+  --faint: #6c758b;
+
+  --brand: #8b8cff;
+  --brand-hover: #a3a4ff;
+  --brand-fg: #0a0c13;
+  --brand-soft: rgba(139, 140, 255, 0.14);
+  --brand-ink: #c3c4ff;
+
+  --ok: #34d399;
+  --ok-soft: rgba(52, 211, 153, 0.12);
+  --warn: #fbbf24;
+  --warn-soft: rgba(251, 191, 36, 0.12);
+  --bad: #f87171;
+  --bad-soft: rgba(248, 113, 113, 0.12);
+
+  --student: #38bdf8;
+  --student-soft: rgba(56, 189, 248, 0.13);
+  --teacher: #34d399;
+  --teacher-soft: rgba(52, 211, 153, 0.13);
+  --admin: #b79bff;
+  --admin-soft: rgba(183, 155, 255, 0.14);
+  --support: #fbbf24;
+  --support-soft: rgba(251, 191, 36, 0.13);
+
+  --ring: rgba(139, 140, 255, 0.45);
+  --shadow: 0 1px 2px rgba(0, 0, 0, 0.3), 0 8px 24px rgba(0, 0, 0, 0.25);
+}
+
+@theme inline {
+  --color-bg: var(--bg);
+  --color-surface: var(--surface);
+  --color-surface-2: var(--surface-2);
+  --color-line: var(--line);
+  --color-fg: var(--text);
+  --color-muted: var(--muted);
+  --color-faint: var(--faint);
+
+  --color-brand: var(--brand);
+  --color-brand-hover: var(--brand-hover);
+  --color-brand-fg: var(--brand-fg);
+  --color-brand-soft: var(--brand-soft);
+  --color-brand-ink: var(--brand-ink);
+
+  --color-ok: var(--ok);
+  --color-ok-soft: var(--ok-soft);
+  --color-warn: var(--warn);
+  --color-warn-soft: var(--warn-soft);
+  --color-bad: var(--bad);
+  --color-bad-soft: var(--bad-soft);
+
+  --color-student: var(--student);
+  --color-student-soft: var(--student-soft);
+  --color-teacher: var(--teacher);
+  --color-teacher-soft: var(--teacher-soft);
+  --color-admin: var(--admin);
+  --color-admin-soft: var(--admin-soft);
+  --color-support: var(--support);
+  --color-support-soft: var(--support-soft);
+
+  --font-sans: var(--font-inter), ui-sans-serif, system-ui, "Segoe UI", sans-serif;
+  --font-display: var(--font-jakarta), var(--font-inter), ui-sans-serif, system-ui, sans-serif;
+  --font-mono: var(--font-jetbrains), ui-monospace, "Cascadia Code", Consolas, monospace;
+
+  --shadow-card: var(--shadow);
+}
+
+html {
+  color-scheme: light;
+}
+html.dark {
+  color-scheme: dark;
+}
+
 body {
-  font-family: ui-sans-serif, system-ui, "Segoe UI", Roboto, Arial, sans-serif;
+  background: var(--bg);
+  color: var(--text);
+  font-family: var(--font-sans);
+}
+
+:focus-visible {
+  outline: 2px solid var(--ring);
+  outline-offset: 2px;
+}
+
+@keyframes shimmer {
+  100% {
+    transform: translateX(100%);
+  }
 }

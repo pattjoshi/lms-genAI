@@ -7,6 +7,7 @@ guardrails and tracing.
 - What we're building and why: [PLAN.md](PLAN.md)
 - What you learn in each phase: [docs/](docs/) (start with [docs/phase-0.md](docs/phase-0.md))
 - The planted "stories" in the dummy data: [data/seed_stories.md](data/seed_stories.md)
+- Interview prep per phase (approach, alternatives, cross-questions): [docs/interview/](docs/interview/)
 
 **Current phase: 0 (skeleton).** Dummy login, 4 portals, realistic seed data, and the first
 LLM call with retries, a circuit breaker, a daily budget guard and Langfuse tracing.
@@ -125,6 +126,8 @@ docker compose down                                          # stop databases (d
 | Login page: "Database tables are missing" | `uv run python -m app.seed --reset` (from `backend/`) |
 | Login page: "Cannot reach the backend" | Is uvicorn running on port 8000? Check terminal 1 for errors |
 | Neo4j dot red right after `docker compose up` | Wait 30–60s, refresh. Check `docker compose logs neo4j` |
+| Neo4j `AuthError ... unauthorized` | Neo4j keeps the password from its **first** start. Reset it (empty in Phase 0–2): `docker compose rm -sf neo4j`, `docker volume rm lms-genai_neo4j_data`, `docker compose up -d neo4j` |
+| Qdrant `Restarting (101)` / "Server disconnected" | Check `docker compose logs qdrant --tail 40`. Then reset it: `docker compose rm -sf qdrant`, `docker volume rm lms-genai_qdrant_data`, `docker compose up -d qdrant` |
 | AI test: `invalid_api_key` | Wrong `OPENAI_API_KEY` in `.env`. Restart uvicorn after editing `.env` |
 | AI test: `quota_exceeded` | OpenAI account out of credit or monthly limit hit |
 | AI test: `model_not_found` | Your key can't use `OPENAI_CHAT_MODEL`. Pick another small model and update the prices in `.env` |
