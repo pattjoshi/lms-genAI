@@ -1,0 +1,59 @@
+# Databases only. The backend (FastAPI) and frontend (Next.js) run directly on your
+# machine: faster reloads on Windows and less RAM than running them in Docker.
+#
+#   docker compose up -d      start
+#   docker compose ps         status
+#   docker compose down       stop (data is kept in volumes)
+#   docker compose down -v    stop AND delete all data
+#
+# Memory limits keep the total under ~2 GB for an 8 GB laptop.
+
+name: lms-genai
+
+services:
+  postgres:
+    image: postgres:16-alpine
+    environment:
+      POSTGRES_USER: ${POSTGRES_USER:-lms}
+      POSTGRES_PASSWORD: ${POSTGRES_PASSWORD:-lms_dev_password}
+      POSTGRES_DB: ${POSTGRES_DB:-lms}
+    ports:
+      - "${POSTGRES_PORT:-5433}:5432" # 5433 on your machine, in case you have a local Postgres on 5432
+    volumes:
+      - postgres_data:/var/lib/postgresql/data
+    healthcheck:
+      test: ["CMD-SHELL", "pg_isready -U ${POSTGRES_USER:-lms} -d ${POSTGRES_DB:-lms}"]
+      interval: 5s
+      timeout: 3s
+      retries: 10
+    mem_limit: 512m
+    restart: unless-stopped
+
+  qdrant:
+    image: qdrant/qdrant:v1.19.1 # keep in step with qdrant-client in backend/pyproject.toml
+    ports:
+      - "6333:6333" # REST API + dashboard at http://localhost:6333/dashboard
+    volumes:
+      - qdrant_data:/qdrant/storage
+    mem_limit: 512m
+    restart: unless-stopped
+
+  neo4j:
+    image: neo4j:5.26-community
+    environment:
+      NEO4J_AUTH: ${NEO4J_USER:-neo4j}/${NEO4J_PASSWORD:-lms_neo4j_password}
+      NEO4J_server_memory_heap_initial__size: 256m
+      NEO4J_server_memory_heap_max__size: 512m
+      NEO4J_server_memory_pagecache_size: 256m
+    ports:
+      - "7474:7474" # browser UI at http://localhost:7474
+      - "7687:7687" # bolt protocol (what the backend uses)
+    volumes:
+      - neo4j_data:/data
+    mem_limit: 1g
+    restart: unless-stopped
+
+volumes:
+  postgres_data:
+  qdrant_data:
+  neo4j_data:
