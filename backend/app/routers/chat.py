@@ -12,12 +12,13 @@ which Phase 5 uses for "most asked doubts" and "content gaps".
 
 import json
 import time
+from datetime import UTC, datetime
 
-from fastapi import APIRouter
+from fastapi import APIRouter, HTTPException
 from fastapi.responses import StreamingResponse
 from langchain_core.messages import HumanMessage, SystemMessage
 from pydantic import BaseModel, Field
-from sqlalchemy import select
+from sqlalchemy import select, update
 
 from app.auth import CurrentUser, SessionDep
 from app.config import get_settings
@@ -138,7 +139,10 @@ async def _answer_stream(user_id: int, question: str):
 async def history(session: SessionDep, user: CurrentUser, limit: int = 20):
     doubts = (
         await session.scalars(
-            select(Doubt).where(Doubt.student_id == user.id).order_by(Doubt.id.desc()).limit(min(limit, 50))
+            select(Doubt)
+            .where(Doubt.student_id == user.id, Doubt.hidden_at.is_(None))
+            .order_by(Doubt.id.desc())
+            .limit(min(limit, 50))
         )
     ).all()
     return [
@@ -155,3 +159,25 @@ async def history(session: SessionDep, user: CurrentUser, limit: int = 20):
         }
         for d in doubts
     ]
+
+
+# Students can remove doubts from their history. This is a soft delete: the row is
+# hidden from the student but kept, because Phase 5 counts questions (anonymously) to
+# find "most asked doubts" and "content gaps" for teachers.
+
+
+@router.delete("/history/{doubt_id}", status_code=204)
+async def hide_doubt(doubt_id: int, session: SessionDep, user: CurrentUser):
+    doubt = await session.get(Doubt, doubt_id)
+    if doubt is None or doubt.student_id != user.id or doubt.hidden_at is not None:
+        raise HTTPException(404, "Doubt not found.")  # same answer for "not yours": don't leak that it exists
+    doubt.hidden_at = datetime.now(UTC)
+    await session.commit()
+
+
+@router.delete("/history", status_code=204)
+async def hide_all_doubts(session: SessionDep, user: CurrentUser):
+    await session.execute(
+        update(Doubt).where(Doubt.student_id == user.id, Doubt.hidden_at.is_(None)).values(hidden_at=datetime.now(UTC))
+    )
+    await session.commit()

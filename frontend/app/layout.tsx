@@ -18,11 +18,19 @@ export const metadata: Metadata = {
 export default function RootLayout({ children }: LayoutProps<"/">) {
   return (
     // suppressHydrationWarning: the theme script adds the "dark" class before React loads.
-    <html lang="en" suppressHydrationWarning className={`${inter.variable} ${jakarta.variable} ${jetbrains.variable} h-full antialiased`}>
+    <html
+      lang="en"
+      suppressHydrationWarning
+      className={`${inter.variable} ${jakarta.variable} ${jetbrains.variable} h-full antialiased`}
+    >
       <head>
         <script dangerouslySetInnerHTML={{ __html: THEME_INIT_SCRIPT }} />
       </head>
-      <body className="min-h-full bg-bg text-fg">{children}</body>
+      {/* suppressHydrationWarning: browser extensions (Grammarly, ColorZilla...) add attributes to
+          <body> before React loads. This ignores attribute differences on <body> only. */}
+      <body className="min-h-full bg-bg text-fg" suppressHydrationWarning>
+        {children}
+      </body>
     </html>
   );
 }

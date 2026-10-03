@@ -26,6 +26,7 @@ type Doc = {
   embed_cost_usd: number;
   course_code: string | null;
   module_title: string | null;
+  version: number;
 };
 
 type ChunkRow = {
@@ -65,22 +66,33 @@ function UploadForm({ options, onUploaded }: { options: Option[]; onUploaded: ()
   const [busy, setBusy] = useState(false);
   const [error, setError] = useState<ApiError | null>(null);
   const [inputKey, setInputKey] = useState(0);
+  const [note, setNote] = useState<string | null>(null);
 
-  async function upload() {
+  async function upload(replace = false) {
     if (!file) return;
     setBusy(true);
     setError(null);
+    setNote(null);
     const form = new FormData();
     form.append("file", file);
     form.append("course_id", String(courseId));
     form.append("module_id", String(moduleId));
+    form.append("replace", String(replace));
     try {
-      await apiFetch("/documents", { method: "POST", body: form });
+      const res = await apiFetch<{ note: string | null }>("/documents", { method: "POST", body: form });
+      setNote(res.note);
       setFile(null);
       setInputKey((k) => k + 1); // reset the file input
       onUploaded();
     } catch (e) {
-      setError(e instanceof ApiError ? e : new ApiError(0, "unknown", String(e)));
+      const err = e instanceof ApiError ? e : new ApiError(0, "unknown", String(e));
+      // Same file name, different content: ask before replacing the current version.
+      if (err.code === "version_exists" && !replace) {
+        setBusy(false);
+        if (confirm(`${err.message}\n\nReplace it with this new version?`)) return upload(true);
+        return;
+      }
+      setError(err);
     } finally {
       setBusy(false);
     }
@@ -133,7 +145,7 @@ function UploadForm({ options, onUploaded }: { options: Option[]; onUploaded: ()
             className="mt-1 block w-full rounded-xl border border-dashed border-line bg-surface-2/50 px-3 py-1.5 text-sm text-muted file:mr-3 file:rounded-lg file:border-0 file:bg-brand-soft file:px-3 file:py-1 file:text-sm file:font-medium file:text-brand-ink"
           />
         </label>
-        <Button onClick={upload} disabled={!file || busy}>
+        <Button onClick={() => upload()} disabled={!file || busy}>
           <Upload className="h-4 w-4" />
           {busy ? "Uploading…" : "Upload"}
         </Button>
@@ -141,6 +153,11 @@ function UploadForm({ options, onUploaded }: { options: Option[]; onUploaded: ()
       {error && (
         <div className="mt-3">
           <Alert title={error.message} detail={error.detail} />
+        </div>
+      )}
+      {note && (
+        <div className="mt-3">
+          <Alert tone="ok" title={note} />
         </div>
       )}
     </Card>
@@ -228,7 +245,12 @@ function CourseFiles() {
   }, [processing, load]);
 
   async function act(doc: Doc, action: "reprocess" | "delete") {
-    if (action === "delete" && !confirm(`Delete ${doc.file_name}? Its chunks are removed from the AI's knowledge.`))
+    if (
+      action === "delete" &&
+      !confirm(
+        `Delete ${doc.file_name}${doc.version > 1 ? " and its older versions" : ""}? It is removed from the AI's knowledge.`,
+      )
+    )
       return;
     try {
       if (action === "delete") await apiFetch(`/documents/${doc.id}`, { method: "DELETE" });
@@ -281,6 +303,14 @@ function CourseFiles() {
                           {d.file_type}
                         </span>
                         <span className="font-medium">{d.file_name}</span>
+                        {d.version > 1 && (
+                          <span
+                            className="rounded-full bg-brand-soft px-1.5 py-0.5 text-[10px] font-medium text-brand-ink"
+                            title="Re-uploaded with new content; older versions are kept but no longer searchable"
+                          >
+                            v{d.version}
+                          </span>
+                        )}
                       </div>
                       {d.error && <p className="mt-1 max-w-md text-xs text-bad">{d.error}</p>}
                     </td>

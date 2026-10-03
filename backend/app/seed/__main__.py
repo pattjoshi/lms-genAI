@@ -17,6 +17,7 @@ from app import models  # noqa: F401 - registers all tables on Base.metadata
 from app.config import get_settings
 from app.db import Base, SessionLocal, engine
 from app.rag import vectorstore
+from app.schema import ensure_schema
 from app.seed.build import build_seed
 
 SEQUENCE_TABLES = [
@@ -54,7 +55,7 @@ async def main(reset: bool) -> int:
         async with engine.begin() as conn:
             if reset:
                 await conn.run_sync(Base.metadata.drop_all)
-            await conn.run_sync(Base.metadata.create_all)
+            await ensure_schema(conn)
     except (OperationalError, OSError) as exc:
         print(f"Cannot reach Postgres: {exc}\nIs Docker running? Try: docker compose up -d", file=sys.stderr)
         return 1

@@ -138,6 +138,28 @@ silent restart. `stream_usage=True` makes OpenAI send token counts in the last c
 - **Duplicate uploads** are detected by a SHA-256 hash of the content (409).
 - Delete removes the vectors **before** the database row, so you never have searchable chunks pointing to a missing file.
 
+### 2.9b Re-uploads, versions and schema upgrades
+
+What happens when a teacher uploads a file that already exists in the course:
+
+| Situation | What happens |
+|---|---|
+| Exact same content (SHA-256) | Refused: "already in this course" |
+| Same content, but it **failed** last time | Processed again automatically (no "duplicate" dead end) |
+| Same **name** in the same module, **new content** | The UI asks *"Replace v1 with this version?"* → the new file becomes **v2** |
+| Old version still processing | Refused until it finishes (prevents two versions racing) |
+
+**Index first, then swap:** v2 is fully indexed *before* v1 is removed from Qdrant. If v2 fails,
+students keep getting answers from v1. For a few seconds both are searchable (a short overlap is better
+than a gap). Old versions stay in the database as history; deleting a file deletes its history too.
+
+**Schema upgrades:** `create_all` only creates missing *tables*. The new columns (`version`, `replaces_id`,
+`superseded_at`, `doubts.hidden_at`) are added on startup by `app/schema.py` with `ALTER TABLE … ADD COLUMN
+IF NOT EXISTS`, so existing databases upgrade without losing data. Bigger projects use Alembic for this.
+
+**Students removing doubts** is a *soft delete* (`hidden_at`): the doubt disappears from the student's
+history, but the row stays so Phase 5 can count questions anonymously for teachers.
+
 ### 2.10 Security: the filter comes from identity
 
 `readable_course_ids(user)` decides which courses a question may search: a student's

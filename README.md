@@ -79,7 +79,7 @@ Admin UIs: Qdrant <http://localhost:6333/dashboard>, Neo4j <http://localhost:747
 ```powershell
 cd backend
 uv sync                                  # creates .venv and installs everything
-uv run pytest                            # 39 tests, no database or API key needed
+uv run pytest                            # 47 tests, no database or API key needed
 uv run python -m app.seed --reset        # create tables + load dummy data
 uv run python -m app.ingest.load_samples # index the 24 sample course files (~$0.0003 of embeddings)
 uv run uvicorn app.main:app --reload --port 8000

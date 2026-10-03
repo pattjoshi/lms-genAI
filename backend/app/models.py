@@ -247,6 +247,16 @@ class Document(Base):
     embed_cost_usd: Mapped[float] = mapped_column(Float, default=0.0)
     created_at: Mapped[datetime] = mapped_column(DateTime(timezone=True), server_default=func.now())
     processed_at: Mapped[datetime | None] = mapped_column(DateTime(timezone=True))
+    # Versioning: re-uploading a file with the same name in the same module creates v2, v3...
+    version: Mapped[int] = mapped_column(
+        Integer, default=1, server_default="1", comment="1, 2, 3... for re-uploads of the same file name"
+    )
+    replaces_id: Mapped[int | None] = mapped_column(
+        ForeignKey("documents.id", ondelete="SET NULL"), comment="The previous version this upload replaces"
+    )
+    superseded_at: Mapped[datetime | None] = mapped_column(
+        DateTime(timezone=True), comment="Set when a newer version went live; this version is no longer searchable"
+    )
 
 
 class Chunk(Base):
@@ -287,3 +297,6 @@ class Doubt(Base):
     cost_usd: Mapped[float] = mapped_column(Float, default=0.0)
     latency_ms: Mapped[int] = mapped_column(Integer, default=0)
     created_at: Mapped[datetime] = mapped_column(DateTime(timezone=True), server_default=func.now())
+    hidden_at: Mapped[datetime | None] = mapped_column(
+        DateTime(timezone=True), comment="Student removed it from their history (kept for anonymous analytics)"
+    )

@@ -5,7 +5,8 @@
 Each file in data/course_files is named like DL301_M2_Training_Neural_Networks.docx,
 which tells us the course and module. It is "uploaded" as that course's teacher and runs
 through exactly the same pipeline as a file uploaded from the teacher portal.
-Files that are already uploaded (same content) are skipped, so it is safe to run twice.
+Safe to run again: unchanged files are skipped, files that failed last time are retried,
+and a sample file whose content changed is indexed as a new version (v2) that replaces the old one.
 """
 
 import asyncio
@@ -17,10 +18,11 @@ from sqlalchemy import select
 from app.config import REPO_ROOT
 from app.db import SessionLocal, engine
 from app.ingest.pipeline import process_document
-from app.ingest.storage import DuplicateFile, store_upload
+from app.ingest.storage import UploadAction, UploadRefused, store_upload
 from app.llm.tracing import init_tracing, shutdown_tracing
 from app.models import Course, Document, Module
 from app.rag import vectorstore
+from app.schema import ensure_schema
 
 SAMPLES_DIR = REPO_ROOT / "data" / "course_files"
 NAME = re.compile(r"^(?P<code>[A-Z]+\d+)_M(?P<module>\d+)_")
@@ -30,6 +32,8 @@ async def main() -> int:
     from app.config import get_settings
 
     init_tracing(get_settings())
+    async with engine.begin() as conn:
+        await ensure_schema(conn)  # works even if the backend hasn't been restarted since an update
     files = sorted(p for p in SAMPLES_DIR.iterdir() if p.is_file())
     print(f"Found {len(files)} sample files in {SAMPLES_DIR}")
     total_chunks = total_tokens = 0
@@ -50,17 +54,23 @@ async def main() -> int:
                 select(Module).where(Module.course_id == course.id, Module.position == int(match["module"]))
             )
             try:
-                doc = await store_upload(
+                doc, action = await store_upload(
                     session,
                     data=path.read_bytes(),
                     file_name=path.name,
                     course_id=course.id,
                     module_id=module.id,
                     uploaded_by=course.teacher_id,
+                    replace=True,  # the sample files are the source of truth: an edited file becomes v2
                 )
-            except DuplicateFile:
-                print(f"  skip  {path.name} (already uploaded)")
+            except UploadRefused as exc:
+                reason = "unchanged, already indexed" if exc.code == "duplicate_file" else exc.message
+                print(f"  skip  {path.name} ({reason})")
                 continue
+            if action == UploadAction.RETRY_FAILED:
+                print(f"  retry {path.name} (failed last time)")
+            elif action == UploadAction.NEW_VERSION:
+                print(f"  new   {path.name} (content changed, indexing v{doc.version})")
             doc_id = doc.id
 
         await process_document(doc_id)

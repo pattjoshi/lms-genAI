@@ -295,6 +295,47 @@ noisy and biased (few people click). Phase 5 adds these signals.
 
 ---
 
+## 13. A teacher uploads the same file twice, or a new version. What happens?
+
+**Approach used:** content hash + file name decide the action. Same content → refuse (or retry if it failed);
+same name + new content → ask, then create **v2** with **index-first-then-swap**: the new version is fully
+indexed before the old one leaves the search index. Old versions are kept as history.
+
+**Alternative 1: always refuse duplicates by name.** Simple, but the teacher must delete first, which creates a
+window where students get no answers from that material.
+
+**Alternative 2: keep every upload searchable.** No data loss, but answers can quote outdated notes, and
+retrieval returns near-duplicate chunks that crowd out other sources.
+
+**Cross-questions:**
+- *"Why not delete v1 first, then index v2?"* If v2 fails to parse or embed, students lose the content entirely.
+  Index-first gives a brief overlap instead of a gap: the same idea as blue-green deployments.
+- *"What if two uploads race?"* Replacing is refused while the current version is still processing.
+- *"Near-duplicates (a fixed typo)?"* The hash differs, so it's a new version. Detecting "almost the same"
+  needs similarity hashing (MinHash/SimHash) or comparing chunk embeddings.
+- *"How did you add columns without losing data?"* Idempotent `ALTER TABLE … ADD COLUMN IF NOT EXISTS`
+  on startup; in a team project, Alembic migrations.
+
+**Real-world example:** document platforms (wikis, LMSs, SharePoint-style libraries) keep version history and
+show the latest by default. RAG indexes need the same rule, or the bot answers from last year's syllabus.
+
+## 14. A student deletes their chat history. Hard or soft delete?
+
+**Approach used:** soft delete (`hidden_at`). The doubt disappears for the student but stays for anonymous
+analytics (most asked doubts, content gaps).
+
+**Alternative 1: hard delete.** Exactly what the user asked for, and the simplest privacy story. Analytics lose the data.
+
+**Alternative 2: anonymise on delete.** Remove the student link (and the answer) but keep the question text for
+counts. A good middle ground.
+
+**Cross-questions:**
+- *"Is soft delete OK under privacy laws (GDPR-style 'right to erasure')?"* Not for personal data on an erasure
+  request. You'd anonymise or hard-delete, and say clearly in the UI what "delete" means. For this project the UI
+  says "Remove from history", which is honest about a soft delete.
+
+---
+
 ## Rapid-fire
 
 | Question | Answer |

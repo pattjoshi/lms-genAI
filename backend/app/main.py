@@ -17,12 +17,13 @@ from starlette.exceptions import HTTPException
 
 from app import models  # noqa: F401 - registers all tables
 from app.config import get_settings
-from app.db import Base, engine
+from app.db import engine
 from app.llm.errors import LLMError
 from app.llm.tracing import init_tracing, shutdown_tracing
 from app.permissions import PermissionDenied
 from app.rag import vectorstore
 from app.routers import ai, auth, chat, data, documents, health, portal
+from app.schema import ensure_schema
 
 logging.basicConfig(level=logging.INFO, format="%(asctime)s %(levelname)-7s %(name)s: %(message)s")
 log = logging.getLogger("app")
@@ -48,13 +49,13 @@ async def _fail_interrupted_documents() -> None:
 @asynccontextmanager
 async def lifespan(_: FastAPI):
     init_tracing(settings)
-    # Create tables added by newer phases (existing tables and data are untouched).
+    # Create new tables and add new columns (existing data is untouched).
     # Best effort: if a database is down, /health shows it and the app still starts.
     try:
         async with engine.begin() as conn:
-            await conn.run_sync(Base.metadata.create_all)
+            await ensure_schema(conn)
     except Exception as exc:  # noqa: BLE001
-        log.warning("Could not create tables at startup: %s", exc)
+        log.warning("Could not create/upgrade tables at startup: %s", exc)
     await _fail_interrupted_documents()
     try:
         await vectorstore.ensure_collection()
