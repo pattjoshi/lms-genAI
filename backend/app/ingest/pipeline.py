@@ -40,8 +40,8 @@ async def process_document(document_id: int) -> None:
     """Run the whole pipeline for one document. Safe to call again (re-processing)."""
     async with SessionLocal() as session:
         doc = await session.get(Document, document_id)
-        if doc is None:
-            return
+        if doc is None or doc.superseded_at is not None:
+            return  # deleted, or an old version that a newer one replaced
         uploader = await session.get(User, doc.uploaded_by)
         try:
             with trace("ingest_document", uploader, "ingest", input={"file": doc.file_name}) as root:
@@ -141,3 +141,23 @@ async def _run(session: AsyncSession, doc: Document, uploader: User | None) -> N
     doc.status = DocumentStatus.ready
     await session.commit()
     log.info("Indexed %s: %d chunks, %d tokens, $%.6f", doc.file_name, len(rows), embedded.tokens, embedded.cost_usd)
+
+    if doc.replaces_id:
+        await _retire_previous_version(session, doc)
+
+
+async def _retire_previous_version(session: AsyncSession, doc: Document) -> None:
+    """The new version is live, so take the old one out of search ("index first, then swap").
+
+    If indexing the new version had failed we would never get here, and students keep
+    getting answers from the old version. A short overlap is better than a gap.
+    """
+    old = await session.get(Document, doc.replaces_id)
+    if old is None or old.superseded_at is not None:
+        return
+    await vectorstore.delete_document(old.id)
+    await session.execute(delete(Chunk).where(Chunk.document_id == old.id))
+    old.superseded_at = datetime.now(UTC)
+    old.num_chunks = 0
+    await session.commit()
+    log.info("%s v%d replaced v%d", doc.file_name, doc.version, old.version)

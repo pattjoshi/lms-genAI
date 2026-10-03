@@ -3,13 +3,13 @@
 // Ask a doubt: the RAG answer streams in token by token, with the retrieved
 // course excerpts shown as numbered sources ([1], [2] in the answer).
 
-import { BookOpen, Bot, FileText, Info, Send, Sparkles } from "lucide-react";
+import { BookOpen, Bot, FileText, Info, MessageSquarePlus, Send, Sparkles, Trash2 } from "lucide-react";
 import { useEffect, useRef, useState } from "react";
 
 import { PortalShell } from "@/components/PortalShell";
 import { Alert, Button, Card, Chip, EmptyState } from "@/components/ui";
 import { useApi } from "@/components/useApi";
-import { ApiError } from "@/lib/api";
+import { apiFetch, ApiError } from "@/lib/api";
 import { streamSSE } from "@/lib/sse";
 
 type Source = {
@@ -209,9 +209,21 @@ function AskDoubt() {
   const [turns, setTurns] = useState<Turn[]>([]);
   const [busy, setBusy] = useState(false);
   const bottom = useRef<HTMLDivElement>(null);
-  const history = useApi<HistoryItem[]>(`/chat/history?limit=8&v=${turns.filter((t) => t.done).length}`);
+  const [historyVersion, setHistoryVersion] = useState(0);
+  const finished = turns.filter((t) => t.done || t.error).length;
+  const history = useApi<HistoryItem[]>(`/chat/history?limit=8&v=${finished}-${historyVersion}`);
 
-  useEffect(() => bottom.current?.scrollIntoView({ behavior: "smooth", block: "end" }), [turns]);
+  // Braces matter: newer browsers return a Promise from scrollIntoView(), and an effect
+  // must return nothing (or a cleanup function).
+  useEffect(() => {
+    bottom.current?.scrollIntoView({ behavior: "smooth", block: "end" });
+  }, [turns]);
+
+  async function removeDoubt(id?: number) {
+    if (id === undefined && !confirm("Remove all your doubts from your history?")) return;
+    await apiFetch(id === undefined ? "/chat/history" : `/chat/history/${id}`, { method: "DELETE" }).catch(() => null);
+    setHistoryVersion((v) => v + 1);
+  }
 
   function update(fn: (t: Turn) => Turn) {
     setTurns((all) => [...all.slice(0, -1), fn(all[all.length - 1])]);
@@ -244,6 +256,14 @@ function AskDoubt() {
         title="Ask a doubt"
         subtitle="Answers come only from the material of your enrolled courses, with sources"
         icon={<Sparkles className="h-4 w-4" />}
+        action={
+          turns.length > 0 && (
+            <Button variant="ghost" onClick={() => setTurns([])} disabled={busy} title="Start a new chat">
+              <MessageSquarePlus className="h-4 w-4" />
+              <span className="hidden sm:inline">New chat</span>
+            </Button>
+          )
+        }
       >
         <div className="space-y-6">
           {turns.length === 0 && (
@@ -290,17 +310,28 @@ function AskDoubt() {
         </div>
       </Card>
 
-      <Card title="Recent doubts" icon={<BookOpen className="h-4 w-4" />} className="h-fit">
+      <Card
+        title="Recent doubts"
+        icon={<BookOpen className="h-4 w-4" />}
+        className="h-fit"
+        action={
+          !!history.data?.length && (
+            <button onClick={() => removeDoubt()} className="text-xs text-faint hover:text-bad" title="Clear history">
+              Clear all
+            </button>
+          )
+        }
+      >
         {!history.data?.length ? (
           <EmptyState title="No doubts yet" />
         ) : (
-          <ul className="space-y-2">
+          <ul className="space-y-1">
             {history.data.map((h) => (
-              <li key={h.id}>
+              <li key={h.id} className="group flex items-start gap-1 rounded-lg hover:bg-surface-2">
                 <button
                   onClick={() => ask(h.question)}
                   disabled={busy}
-                  className="w-full rounded-lg px-2 py-1.5 text-left text-sm text-fg hover:bg-surface-2"
+                  className="min-w-0 flex-1 px-2 py-1.5 text-left text-sm text-fg"
                   title="Ask again"
                 >
                   <span className="line-clamp-2">{h.question}</span>
@@ -309,6 +340,14 @@ function AskDoubt() {
                   >
                     {h.status.replace("_", " ")}
                   </span>
+                </button>
+                <button
+                  onClick={() => removeDoubt(h.id)}
+                  className="mt-1.5 mr-1 rounded-md p-1 text-faint opacity-60 hover:bg-bad-soft hover:text-bad group-hover:opacity-100"
+                  title="Remove from history"
+                  aria-label={`Remove "${h.question}" from history`}
+                >
+                  <Trash2 className="h-3.5 w-3.5" />
                 </button>
               </li>
             ))}
