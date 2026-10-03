@@ -14,7 +14,8 @@ from app.models import Role
 
 class Resource(StrEnum):
     STUDENT_RECORDS = "student_records"  # profile, enrollments, quiz scores
-    COURSE_MATERIAL = "course_material"  # uploaded files / chunks
+    COURSE_MATERIAL = "course_material"  # read uploaded files / chunks (RAG answers)
+    MANAGE_MATERIAL = "manage_material"  # upload / delete course files
     PAYMENTS = "payments"
     AI_USAGE = "ai_usage"  # token cost / latency dashboard
 
@@ -32,24 +33,28 @@ PERMISSIONS: dict[Role, dict[Resource, Scope]] = {
     Role.student: {
         Resource.STUDENT_RECORDS: Scope.OWN,
         Resource.COURSE_MATERIAL: Scope.ENROLLED,
+        Resource.MANAGE_MATERIAL: Scope.NONE,
         Resource.PAYMENTS: Scope.OWN,
         Resource.AI_USAGE: Scope.NONE,
     },
     Role.teacher: {
         Resource.STUDENT_RECORDS: Scope.OWN_COURSES,
         Resource.COURSE_MATERIAL: Scope.OWN_COURSES,
+        Resource.MANAGE_MATERIAL: Scope.OWN_COURSES,
         Resource.PAYMENTS: Scope.NONE,
         Resource.AI_USAGE: Scope.NONE,
     },
     Role.admin: {
         Resource.STUDENT_RECORDS: Scope.ALL,
         Resource.COURSE_MATERIAL: Scope.ALL,
+        Resource.MANAGE_MATERIAL: Scope.ALL,
         Resource.PAYMENTS: Scope.ALL,
         Resource.AI_USAGE: Scope.ALL,
     },
     Role.support: {
         Resource.STUDENT_RECORDS: Scope.TICKET_STUDENT,
         Resource.COURSE_MATERIAL: Scope.ALL,
+        Resource.MANAGE_MATERIAL: Scope.NONE,
         Resource.PAYMENTS: Scope.TICKET_STUDENT,
         Resource.AI_USAGE: Scope.NONE,
     },

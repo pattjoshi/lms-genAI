@@ -1,0 +1,31 @@
+<!doctype html>
+<html lang="en"><head><meta charset="utf-8">
+<title>DB201 - Advanced SQL</title>
+<style>body{font-family:Georgia,serif;max-width:46rem;margin:2rem auto;line-height:1.6}code{background:#f3f3f3;padding:0 .2em}nav{font-size:.9em;color:#666}</style>
+</head><body>
+<nav>Course DB201 &middot; course notes</nav>
+<h1>Advanced SQL</h1>
+<p>Real questions usually need data from several tables. This module covers joins, subqueries, and the indexes that keep such queries fast.</p>
+<section><h2>SQL Joins</h2>
+<p>Prerequisites: SELECT Queries, Tables and Keys.</p>
+<p>A join combines rows from two tables based on a related column, usually a foreign key matching a primary key. Most students find joins the hardest topic in this course, so take them slowly and draw the tables.</p>
+<p>An INNER JOIN returns only rows that have a match in both tables. For example, <code>SELECT u.full_name, c.title FROM enrollments e JOIN users u ON u.id = e.student_id JOIN courses c ON c.id = e.course_id;</code> lists each student with each course they are enrolled in. Students with no enrollments do not appear.</p>
+<p>A LEFT JOIN returns every row from the left table, plus matching rows from the right table, filling NULL where there is no match. It answers questions like "list all students, including those with no quiz attempts". A RIGHT JOIN is the mirror image, and a FULL OUTER JOIN keeps unmatched rows from both sides. A CROSS JOIN returns every combination of rows and is rarely what you want.</p>
+<p>Two classic mistakes: forgetting the ON condition, which produces a huge accidental cross product, and putting a condition on the right table in WHERE after a LEFT JOIN, which silently turns it back into an inner join because NULL rows are filtered out. Put such conditions in the ON clause instead.</p>
+<p>Use short table aliases such as u, c and e to keep join queries readable.</p>
+</section>
+<section><h2>Subqueries</h2>
+<p>Prerequisites: SELECT Queries, Aggregation and GROUP BY.</p>
+<p>A subquery is a query nested inside another query. A scalar subquery returns one value, as in finding students who scored above the overall average: <code>WHERE score_pct &gt; (SELECT AVG(score_pct) FROM quiz_attempts)</code>.</p>
+<p>Subqueries with IN or EXISTS test membership. <code>WHERE id IN (SELECT student_id FROM payments WHERE status = 'failed')</code> finds students with a failed payment. EXISTS returns true as soon as the subquery finds one row, which is often faster for large tables. Beware NOT IN when the subquery can return NULL: the whole condition becomes unknown and returns no rows; NOT EXISTS is safer.</p>
+<p>A correlated subquery refers to the outer query and is evaluated once per outer row, for example finding each student's best attempt. It can be slow on large tables.</p>
+<p>Common Table Expressions (CTEs), written with WITH, give a subquery a name and make complex queries much easier to read. Recursive CTEs can walk hierarchies such as a chain of course prerequisites.</p>
+</section>
+<section><h2>Indexes</h2>
+<p>Prerequisites: Tables and Keys.</p>
+<p>An index is a separate data structure that lets the database find rows without scanning the whole table, like the index at the back of a book. Most databases, including PostgreSQL, use a B-tree index by default, which supports equality and range searches and keeps lookups at O(log n).</p>
+<p>Primary keys and UNIQUE constraints get an index automatically. Add indexes on columns that are frequently used in WHERE clauses, JOIN conditions and ORDER BY, such as foreign keys like student_id.</p>
+<p>Indexes are not free. Each one uses disk space and slows down INSERT, UPDATE and DELETE, because the index must be updated too. An index on a low-selectivity column, such as a boolean, rarely helps.</p>
+<p>A composite index covers several columns, and column order matters: an index on (course_id, student_id) helps queries filtering on course_id alone, but not on student_id alone. Use EXPLAIN (or EXPLAIN ANALYZE in PostgreSQL) to see whether a query uses an index or does a full sequential scan.</p>
+</section>
+<footer><p>&copy; LMS GenAI demo content</p></footer></body></html>

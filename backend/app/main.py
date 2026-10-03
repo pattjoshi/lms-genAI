@@ -11,26 +11,58 @@ from fastapi import FastAPI, Request
 from fastapi.exceptions import RequestValidationError
 from fastapi.middleware.cors import CORSMiddleware
 from fastapi.responses import JSONResponse
+from sqlalchemy import update
 from sqlalchemy.exc import OperationalError, ProgrammingError
 from starlette.exceptions import HTTPException
 
+from app import models  # noqa: F401 - registers all tables
 from app.config import get_settings
-from app.db import engine
+from app.db import Base, engine
 from app.llm.errors import LLMError
 from app.llm.tracing import init_tracing, shutdown_tracing
 from app.permissions import PermissionDenied
-from app.routers import ai, auth, data, health, portal
+from app.rag import vectorstore
+from app.routers import ai, auth, chat, data, documents, health, portal
 
 logging.basicConfig(level=logging.INFO, format="%(asctime)s %(levelname)-7s %(name)s: %(message)s")
 log = logging.getLogger("app")
 settings = get_settings()
 
 
+async def _fail_interrupted_documents() -> None:
+    """Background jobs die with the process. Files left mid-pipeline would show
+    "embedding" forever, so mark them failed; the teacher can click Re-process."""
+    try:
+        async with engine.begin() as conn:
+            result = await conn.execute(
+                update(models.Document)
+                .where(models.Document.status.not_in([models.DocumentStatus.ready, models.DocumentStatus.failed]))
+                .values(status=models.DocumentStatus.failed, error="Interrupted by a server restart. Click Re-process.")
+            )
+            if result.rowcount:
+                log.warning("Marked %d interrupted document(s) as failed.", result.rowcount)
+    except Exception as exc:  # noqa: BLE001
+        log.warning("Could not check for interrupted documents: %s", exc)
+
+
 @asynccontextmanager
 async def lifespan(_: FastAPI):
     init_tracing(settings)
+    # Create tables added by newer phases (existing tables and data are untouched).
+    # Best effort: if a database is down, /health shows it and the app still starts.
+    try:
+        async with engine.begin() as conn:
+            await conn.run_sync(Base.metadata.create_all)
+    except Exception as exc:  # noqa: BLE001
+        log.warning("Could not create tables at startup: %s", exc)
+    await _fail_interrupted_documents()
+    try:
+        await vectorstore.ensure_collection()
+    except Exception as exc:  # noqa: BLE001
+        log.warning("Could not prepare the Qdrant collection at startup: %s", exc)
     yield
     shutdown_tracing()
+    await vectorstore.close()
     await engine.dispose()
 
 
@@ -42,7 +74,7 @@ app.add_middleware(
     allow_headers=["*"],
 )
 
-for r in (health.router, auth.router, portal.router, data.router, ai.router):
+for r in (health.router, auth.router, portal.router, data.router, ai.router, documents.router, chat.router):
     app.include_router(r)
 
 
@@ -89,6 +121,14 @@ async def db_schema_error(_: Request, exc: ProgrammingError):
 @app.exception_handler(OperationalError)
 async def db_down(_: Request, exc: OperationalError):
     return _error(503, "db_unavailable", "Cannot reach Postgres. Is `docker compose up -d` running?", str(exc)[:300])
+
+
+@app.exception_handler(ConnectionRefusedError)
+async def service_down(_: Request, exc: ConnectionRefusedError):
+    # asyncpg raises this directly (not wrapped in OperationalError) when Postgres isn't running.
+    return _error(
+        503, "service_unavailable", "A database is not reachable. Is `docker compose up -d` running?", str(exc)[:300]
+    )
 
 
 @app.exception_handler(Exception)

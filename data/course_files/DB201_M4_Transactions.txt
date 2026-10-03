@@ -1,0 +1,33 @@
+DB201 - Transactions
+====================
+
+When several changes must succeed or fail together, and many users work at the same time, databases rely on transactions.
+
+ACID Properties
+---------------
+
+Prerequisites: Tables and Keys.
+
+A transaction is a group of operations treated as a single unit, started with BEGIN and finished with COMMIT, or cancelled with ROLLBACK. The classic example is a payment: deducting money from one account and adding it to another must both happen, or neither.
+
+ACID describes the guarantees a transaction provides:
+
+* Atomicity: all operations happen, or none do. A crash halfway through leaves no partial change.
+* Consistency: a transaction moves the database from one valid state to another, respecting all constraints such as foreign keys and CHECK rules.
+* Isolation: concurrent transactions do not see each other's unfinished work; the result is as if they ran one after another.
+* Durability: once committed, changes survive crashes and power failures, usually guaranteed by a write-ahead log (WAL) written to disk before the commit is confirmed.
+
+In the LMS, creating an enrollment and recording its successful payment should be one transaction, so a student is never enrolled without a payment record.
+
+Concurrency Control
+-------------------
+
+Prerequisites: ACID Properties.
+
+When transactions run at the same time, several anomalies can occur. A dirty read reads data another transaction has not committed yet. A non-repeatable read gets a different value when reading the same row twice. A phantom read sees new rows appear in a repeated range query. A lost update happens when two transactions read a value, both modify it, and one overwrites the other.
+
+SQL defines four isolation levels that trade safety for speed: Read Uncommitted, Read Committed, Repeatable Read and Serializable. PostgreSQL's default is Read Committed, which prevents dirty reads. Serializable prevents all anomalies but may abort transactions that must then be retried.
+
+Databases implement isolation in two main ways. Pessimistic locking takes locks before accessing data, for example SELECT ... FOR UPDATE, and makes other transactions wait. Optimistic approaches let transactions proceed and check for conflicts at commit time. PostgreSQL uses MVCC (multi-version concurrency control): readers see a consistent snapshot and never block writers.
+
+Two transactions waiting for each other's locks form a deadlock; the database detects it and aborts one of them, so applications must be ready to retry.

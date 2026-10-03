@@ -41,6 +41,8 @@ class Settings(BaseSettings):
 
     # --- OpenAI ---
     openai_api_key: SecretStr | None = None
+    # Optional: an OpenAI-compatible endpoint (Azure, a proxy, a local server). Empty = api.openai.com
+    openai_base_url: str | None = None
     openai_chat_model: str = "gpt-4o-mini"
     openai_embedding_model: str = "text-embedding-3-small"
     # Empty in .env = don't send temperature (needed for reasoning models).
@@ -62,10 +64,29 @@ class Settings(BaseSettings):
     # --- Cost guard ---
     daily_budget_usd: float = 1.0
 
+    # --- Phase 1: upload pipeline ---
+    upload_dir: Path = BACKEND_DIR / "storage" / "uploads"
+    max_upload_mb: int = 10
+    chunk_size: int = 1000  # characters (~250 tokens)
+    chunk_overlap: int = 150  # characters shared by neighbouring chunks
+    embedding_dim: int = 1536  # must match OPENAI_EMBEDDING_MODEL (text-embedding-3-small = 1536)
+    embedding_batch_size: int = 64  # texts per embeddings API request
+    qdrant_collection: str = "course_chunks"
+
+    # --- Phase 1: RAG answering ---
+    rag_top_k: int = 5  # chunks given to the LLM
+    rag_min_score: float = 0.25  # below this cosine similarity a chunk counts as "not relevant"
+    rag_max_output_tokens: int = 600
+
     # --- Langfuse (tracing) ---
     langfuse_public_key: str | None = None
     langfuse_secret_key: SecretStr | None = None
     langfuse_base_url: str = "https://us.cloud.langfuse.com"
+
+    @field_validator("openai_base_url", mode="before")
+    @classmethod
+    def _empty_url_is_none(cls, value):
+        return value or None
 
     @field_validator("openai_temperature", mode="before")
     @classmethod

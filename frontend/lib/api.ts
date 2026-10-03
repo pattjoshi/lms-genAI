@@ -19,7 +19,8 @@ export class ApiError extends Error {
 export async function apiFetch<T>(path: string, init: RequestInit = {}): Promise<T> {
   const user = getUser();
   const headers = new Headers(init.headers);
-  headers.set("Content-Type", "application/json");
+  // FormData (file upload) must set its own multipart boundary header.
+  if (!(init.body instanceof FormData)) headers.set("Content-Type", "application/json");
   if (user) headers.set("X-User-Id", String(user.id));
 
   let res: Response;
@@ -29,7 +30,7 @@ export async function apiFetch<T>(path: string, init: RequestInit = {}): Promise
     throw new ApiError(0, "backend_unreachable", `Cannot reach the backend at ${API_URL}. Is it running?`);
   }
 
-  const body = await res.json().catch(() => null);
+  const body = res.status === 204 ? null : await res.json().catch(() => null);
   if (!res.ok) {
     throw new ApiError(
       res.status,

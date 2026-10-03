@@ -8,6 +8,7 @@ we log a warning and continue without tracing.
 """
 
 import logging
+from contextlib import contextmanager
 
 from app.config import Settings
 from app.models import User
@@ -75,3 +76,69 @@ def shutdown_tracing() -> None:
 
 def tracing_enabled() -> bool:
     return _client is not None
+
+
+# ---------------------------------------------------------------------------
+# Spans: group several steps (embed -> retrieve -> generate) into ONE trace.
+# ---------------------------------------------------------------------------
+
+
+class _NoopSpan:
+    def update(self, **_kwargs) -> None:
+        pass
+
+
+@contextmanager
+def observe(name: str, as_type: str = "span", **fields):
+    """A Langfuse observation (span, retriever, embedding...) around a block of code.
+
+    LangChain calls made inside the block are nested under it automatically.
+    No-op when tracing is off; tracing errors never reach the caller.
+    """
+    if _client is None:
+        yield _NoopSpan()
+        return
+    try:
+        cm = _client.start_as_current_observation(name=name, as_type=as_type, **fields)
+        span = cm.__enter__()
+    except Exception:  # noqa: BLE001
+        log.debug("Could not start span %s", name, exc_info=True)
+        yield _NoopSpan()
+        return
+    try:
+        yield span
+    finally:
+        try:
+            cm.__exit__(None, None, None)
+        except Exception:  # noqa: BLE001
+            log.debug("Could not end span %s", name, exc_info=True)
+
+
+@contextmanager
+def trace(name: str, user: User | None, feature: str, input=None, session_id: str | None = None):
+    """Root of a multi-step trace, with user / tags / session set for every nested step."""
+    if _client is None:
+        yield _NoopSpan()
+        return
+    try:
+        from langfuse import propagate_attributes
+
+        attrs = propagate_attributes(
+            user_id=f"{user.role.value}-{user.id}" if user else None,
+            session_id=session_id,
+            tags=[feature] + ([user.role.value] if user else []),
+            trace_name=name,
+        )
+        attrs.__enter__()
+    except Exception:  # noqa: BLE001
+        log.debug("Could not propagate trace attributes", exc_info=True)
+        attrs = None
+    try:
+        with observe(name, as_type="chain", input=input) as span:
+            yield span
+    finally:
+        if attrs is not None:
+            try:
+                attrs.__exit__(None, None, None)
+            except Exception:  # noqa: BLE001
+                log.debug("Could not close trace attributes", exc_info=True)

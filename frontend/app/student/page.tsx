@@ -1,6 +1,7 @@
 "use client";
 
-import { BookOpen, TrendingDown } from "lucide-react";
+import { ArrowRight, BookOpen, MessageCircleQuestion, TrendingDown } from "lucide-react";
+import Link from "next/link";
 
 import { AiHelloCard } from "@/components/AiHelloCard";
 import { PermissionTestCard } from "@/components/PermissionTestCard";
@@ -86,6 +87,21 @@ export default function StudentPage() {
     <PortalShell role="student">
       {() => (
         <>
+          <Link
+            href="/student/ask"
+            className="group flex items-center gap-4 rounded-2xl border border-brand/30 bg-brand-soft p-5 transition hover:border-brand"
+          >
+            <span className="flex h-11 w-11 items-center justify-center rounded-xl bg-brand text-brand-fg">
+              <MessageCircleQuestion className="h-5 w-5" />
+            </span>
+            <div className="flex-1">
+              <p className="font-display font-semibold text-fg">Ask a doubt</p>
+              <p className="text-sm text-muted">
+                Get an answer from your course material, with the exact file and page.
+              </p>
+            </div>
+            <ArrowRight className="h-5 w-5 text-brand-ink transition group-hover:translate-x-1" />
+          </Link>
           <StudentHome />
           <AiHelloCard />
           <PermissionTestCard />

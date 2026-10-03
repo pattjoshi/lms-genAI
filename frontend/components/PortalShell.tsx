@@ -5,10 +5,11 @@
 // The role check here is only UX: the backend enforces roles on every request.
 
 import { GraduationCap, LogOut, Menu, X } from "lucide-react";
-import { useRouter } from "next/navigation";
+import Link from "next/link";
+import { usePathname, useRouter } from "next/navigation";
 import { useEffect, useState, type ReactNode } from "react";
 
-import { NAV, ROADMAP } from "@/lib/features";
+import { CURRENT_PHASE, NAV, ROADMAP } from "@/lib/features";
 import { clearUser, getUser, type Role, type SessionUser } from "@/lib/session";
 import { ThemeToggle } from "./ThemeToggle";
 import { Avatar, Card, ROLE_STYLE } from "./ui";
@@ -35,25 +36,38 @@ function Brand() {
 }
 
 function Sidebar({ role, user, onLogout }: { role: Role; user: SessionUser; onLogout: () => void }) {
+  const pathname = usePathname();
   return (
     <div className="flex h-full flex-col gap-6 p-4">
       <Brand />
       <nav className="flex-1 space-y-1">
-        {NAV[role].map(({ label, icon: Icon, phase }) => {
-          const active = !phase;
+        {NAV[role].map(({ label, icon: Icon, href, phase }) => {
+          if (!href) {
+            return (
+              <div
+                key={label}
+                aria-disabled
+                title={`Arrives in Phase ${phase}`}
+                className="flex cursor-not-allowed items-center gap-3 rounded-xl px-3 py-2 text-sm text-faint"
+              >
+                <Icon className="h-4 w-4" />
+                <span className="flex-1">{label}</span>
+                <span className="rounded-md bg-surface-2 px-1.5 py-0.5 font-mono text-[10px]">P{phase}</span>
+              </div>
+            );
+          }
+          const active = pathname === href;
           return (
-            <div
+            <Link
               key={label}
-              aria-disabled={!active}
-              title={phase ? `Arrives in Phase ${phase}` : undefined}
-              className={`flex items-center gap-3 rounded-xl px-3 py-2 text-sm ${
-                active ? "bg-brand-soft font-medium text-brand-ink" : "cursor-not-allowed text-faint"
+              href={href}
+              className={`flex items-center gap-3 rounded-xl px-3 py-2 text-sm transition-colors ${
+                active ? "bg-brand-soft font-medium text-brand-ink" : "text-muted hover:bg-surface-2 hover:text-fg"
               }`}
             >
               <Icon className="h-4 w-4" />
               <span className="flex-1">{label}</span>
-              {phase && <span className="rounded-md bg-surface-2 px-1.5 py-0.5 font-mono text-[10px]">P{phase}</span>}
-            </div>
+            </Link>
           );
         })}
       </nav>
@@ -64,7 +78,11 @@ function Sidebar({ role, user, onLogout }: { role: Role; user: SessionUser; onLo
             <p className="truncate text-sm font-medium text-fg">{user.full_name}</p>
             <p className={`text-xs capitalize ${ROLE_STYLE[role].text}`}>{role}</p>
           </div>
-          <button onClick={onLogout} title="Log out" className="rounded-lg p-1.5 text-muted hover:bg-surface hover:text-fg">
+          <button
+            onClick={onLogout}
+            title="Log out"
+            className="rounded-lg p-1.5 text-muted hover:bg-surface hover:text-fg"
+          >
             <LogOut className="h-4 w-4" />
           </button>
         </div>
@@ -73,7 +91,17 @@ function Sidebar({ role, user, onLogout }: { role: Role; user: SessionUser; onLo
   );
 }
 
-export function PortalShell({ role, children }: { role: Role; children: (user: SessionUser) => ReactNode }) {
+export function PortalShell({
+  role,
+  title,
+  showRoadmap = true,
+  children,
+}: {
+  role: Role;
+  title?: string;
+  showRoadmap?: boolean;
+  children: (user: SessionUser) => ReactNode;
+}) {
   const router = useRouter();
   const [user, setUserState] = useState<SessionUser | null>(null);
   const [menuOpen, setMenuOpen] = useState(false);
@@ -126,7 +154,7 @@ export function PortalShell({ role, children }: { role: Role; children: (user: S
               <Menu className="h-5 w-5" />
             </button>
             <div>
-              <h1 className="font-display text-lg font-bold text-fg">{TITLES[role]}</h1>
+              <h1 className="font-display text-lg font-bold text-fg">{title ?? TITLES[role]}</h1>
               <p className="hidden text-xs text-muted sm:block">Welcome back, {user.full_name.split(" ")[0]}</p>
             </div>
           </div>
@@ -136,19 +164,25 @@ export function PortalShell({ role, children }: { role: Role; children: (user: S
 
       <main className="mx-auto grid max-w-6xl gap-5 px-4 py-6 sm:px-6">
         {children(user)}
-        <Card title="Coming next" subtitle="Core features of this portal and the phase that builds them">
-          <ul className="grid gap-x-6 gap-y-2.5 sm:grid-cols-2">
-            {ROADMAP[role].map((f) => (
-              <li key={f.id} className="flex items-center gap-2.5 text-sm text-fg">
-                <span className="w-9 shrink-0 font-mono text-xs text-faint">{f.id}</span>
-                <span className="flex-1">{f.name}</span>
-                <span className="rounded-full bg-brand-soft px-2 py-0.5 text-xs font-medium text-brand-ink">
-                  Phase {f.phase}
-                </span>
-              </li>
-            ))}
-          </ul>
-        </Card>
+        {showRoadmap && (
+          <Card title="Coming next" subtitle="Core features of this portal and the phase that builds them">
+            <ul className="grid gap-x-6 gap-y-2.5 sm:grid-cols-2">
+              {ROADMAP[role].map((f) => (
+                <li key={f.id} className="flex items-center gap-2.5 text-sm text-fg">
+                  <span className="w-9 shrink-0 font-mono text-xs text-faint">{f.id}</span>
+                  <span className="flex-1">{f.name}</span>
+                  {f.phase <= CURRENT_PHASE ? (
+                    <span className="rounded-full bg-ok-soft px-2 py-0.5 text-xs font-medium text-ok">Live</span>
+                  ) : (
+                    <span className="rounded-full bg-brand-soft px-2 py-0.5 text-xs font-medium text-brand-ink">
+                      Phase {f.phase}
+                    </span>
+                  )}
+                </li>
+              ))}
+            </ul>
+          </Card>
+        )}
       </main>
     </div>
   );

@@ -9,8 +9,13 @@ guardrails and tracing.
 - The planted "stories" in the dummy data: [data/seed_stories.md](data/seed_stories.md)
 - Interview prep per phase (approach, alternatives, cross-questions): [docs/interview/](docs/interview/)
 
-**Current phase: 0 (skeleton).** Dummy login, 4 portals, realistic seed data, and the first
-LLM call with retries, a circuit breaker, a daily budget guard and Langfuse tracing.
+**Current phase: 1 (upload pipeline + basic RAG).** Teachers upload PDF/DOCX/HTML/TXT files that are
+parsed, chunked, embedded, tagged and stored in Qdrant; students ask doubts and get streamed answers
+with numbered sources (file + page). Phase 0 gave us dummy login, 4 portals, seed data and a safe LLM
+gateway (retries, circuit breaker, daily budget, Langfuse).
+
+**Already set up Phase 0?** Just pull, then: `cd backend; uv sync`, restart the backend (new tables are
+created automatically), run `uv run python -m app.ingest.load_samples`, and `cd frontend; npm install`.
 
 ---
 
@@ -74,8 +79,9 @@ Admin UIs: Qdrant <http://localhost:6333/dashboard>, Neo4j <http://localhost:747
 ```powershell
 cd backend
 uv sync                                  # creates .venv and installs everything
-uv run pytest                            # 27 tests, no database or API key needed
+uv run pytest                            # 39 tests, no database or API key needed
 uv run python -m app.seed --reset        # create tables + load dummy data
+uv run python -m app.ingest.load_samples # index the 24 sample course files (~$0.0003 of embeddings)
 uv run uvicorn app.main:app --reload --port 8000
 ```
 
@@ -101,7 +107,18 @@ Open <http://localhost:3000>.
 6. Log in as **Neha Kapoor** (admin): the request returns all 150 students, and "AI usage today" shows your call.
 7. Open your Langfuse project → **Traces**: your call is there, tagged `hello` and `student`.
 
-Then work through the experiments in [docs/phase-0.md](docs/phase-0.md).
+**Phase 1:**
+
+8. As **Riya**, open **Ask a doubt** and ask *"How does backpropagation compute gradients?"*. The answer
+   streams in with numbered sources (file, page/section, similarity score) plus tokens, cost and latency.
+9. Ask *"Who won the cricket world cup in 2011?"*: "I couldn't find this…". The LLM is never called.
+10. Ask *"Explain the attention mechanism"*: Riya isn't enrolled in NLP, so she gets no NLP material.
+11. As **Rahul Gupta**, open **Course files**: upload a file, watch it go parsing → … → ready, then click
+    the eye icon to see exactly what the AI sees (chunks + topic tags).
+12. In Langfuse, open the `rag_answer` trace: retrieve → generate, with the chunks and the full prompt.
+13. Measure retrieval: `uv run python -m app.evals.retrieval` (from `backend/`).
+
+Then work through the experiments in [docs/phase-0.md](docs/phase-0.md) and [docs/phase-1.md](docs/phase-1.md).
 
 ---
 
@@ -134,5 +151,10 @@ docker compose down                                          # stop databases (d
 | AI test: `daily_budget_reached` | Today's spend hit `DAILY_BUDGET_USD`. Resets at midnight IST |
 | AI test: `ai_paused` | Circuit breaker opened after repeated failures. Fix the cause; it retries after 60s |
 | Langfuse dot red | Keys missing or wrong in `.env`. The app still works without tracing |
+| Upload fails: `.doc` not supported | Save the file as `.docx` in Word (old binary .doc needs extra tools) |
+| Upload `failed`: "No text found… scanned PDF" | The PDF is images only. OCR is out of scope; use a text PDF |
+| File stuck in `embedding`/`failed` with an AI error | Fix the key/budget issue, then click **Re-process** (↻) on the file |
+| Every answer says "I couldn't find this" | Did you run `load_samples`? Is Qdrant green? Is the student enrolled in that course? |
+| Changed `CHUNK_SIZE`/`CHUNK_OVERLAP` | Re-index: `uv run python -m app.seed --reset` then `load_samples` (or ↻ each file) |
 | "Last 30 days" stories look wrong | Data dates are relative to when you seeded. Re-seed with `--reset` |
 | Start completely fresh | `docker compose down -v`, `docker compose up -d`, re-seed |

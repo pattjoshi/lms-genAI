@@ -1,0 +1,121 @@
+# Retrieval eval set (Phase 1). Grows in Phase 2 and Phase 7.
+#
+# For each question we know which course, module and topic contains the answer.
+# The eval checks whether retrieval puts a chunk of that topic in the top k results.
+# It does NOT call the chat model, so a full run costs only ~22 tiny embedding calls.
+#
+#   uv run python -m app.evals.retrieval          (from backend/)
+#
+# Note how questions are phrased like a student would ask, not copied from the text:
+# a good eval tests meaning, not keyword overlap.
+
+questions:
+  - id: R01
+    question: "What's the difference between a list and a tuple in Python?"
+    course: PY101
+    module: 2
+    topic: Lists and Tuples
+  - id: R02
+    question: "Why is looking up a key in a dictionary so fast?"
+    course: PY101
+    module: 2
+    topic: Dictionaries and Sets
+  - id: R03
+    question: "What does super() do when I override a method?"
+    course: PY101
+    module: 3
+    topic: Inheritance
+  - id: R04
+    question: "Why should I use a with statement to open files?"
+    course: PY101
+    module: 4
+    topic: File Handling
+  - id: R05
+    question: "How can numpy add a row to every row of a matrix without a loop?"
+    course: PY101
+    module: 4
+    topic: NumPy Basics
+  - id: R06
+    question: "What happens if my learning rate is too big?"
+    course: ML201
+    module: 2
+    topic: Gradient Descent
+  - id: R07
+    question: "My model is 98% accurate but useless, why?"
+    course: ML201
+    module: 3
+    topic: Evaluation Metrics
+  - id: R08
+    question: "Lasso vs Ridge, what's the difference?"
+    course: ML201
+    module: 3
+    topic: Overfitting and Regularization
+  - id: R09
+    question: "How do I pick the number of clusters?"
+    course: ML201
+    module: 4
+    topic: K-Means Clustering
+  - id: R10
+    question: "Why can't one perceptron solve XOR?"
+    course: DL301
+    module: 1
+    topic: Perceptron
+  - id: R11
+    question: "How are gradients computed in a neural network, forward and backward?"
+    course: DL301
+    module: 2
+    topic: Backpropagation
+  - id: R12
+    question: "What default settings does Adam use?"
+    course: DL301
+    module: 2
+    topic: Optimizers
+  - id: R13
+    question: "Which gates does an LSTM have?"
+    course: DL301
+    module: 4
+    topic: LSTM
+  - id: R14
+    question: "What did ResNet change to train very deep networks?"
+    course: DL301
+    module: 3
+    topic: CNN Architectures
+  - id: R15
+    question: "How does TF-IDF decide which words are important?"
+    course: NLP302
+    module: 1
+    topic: Bag of Words and TF-IDF
+  - id: R16
+    question: "What is negative sampling?"
+    course: NLP302
+    module: 2
+    topic: Word2Vec
+  - id: R17
+    question: "Why do we scale attention scores by the square root of the dimension?"
+    course: NLP302
+    module: 3
+    topic: Attention Mechanism
+  - id: R18
+    question: "When should I use a LEFT JOIN instead of an INNER JOIN?"
+    course: DB201
+    module: 3
+    topic: SQL Joins
+  - id: R19
+    question: "Can I use COUNT in a WHERE clause?"
+    course: DB201
+    module: 2
+    topic: Aggregation and GROUP BY
+  - id: R20
+    question: "Which traversal gives the shortest path in an unweighted graph?"
+    course: DSA201
+    module: 3
+    topic: Graph Traversal BFS and DFS
+
+  # Not in any course: the best match should score BELOW RAG_MIN_SCORE,
+  # so the assistant says "I couldn't find this" instead of guessing.
+  - id: N01
+    question: "Who won the cricket world cup in 2011?"
+    expect: no_answer
+  - id: N02
+    question: "Give me a recipe for paneer butter masala."
+    expect: no_answer

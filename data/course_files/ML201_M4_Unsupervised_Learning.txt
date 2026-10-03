@@ -1,0 +1,30 @@
+ML201 - Unsupervised Learning
+=============================
+
+Unsupervised learning finds structure in data without labels. The two classic tasks are grouping similar items (clustering) and compressing many features into a few (dimensionality reduction).
+
+K-Means Clustering
+------------------
+
+Prerequisites: Linear Algebra Basics.
+
+K-Means divides data into k groups called clusters. The algorithm is simple. First, choose k starting centres, called centroids, often at random. Second, assign every point to its nearest centroid using Euclidean distance. Third, move each centroid to the mean of the points assigned to it. Repeat the assign and update steps until the assignments stop changing.
+
+You must choose k in advance. The elbow method plots the within-cluster sum of squares for different k values and picks the point where adding more clusters stops helping much. The silhouette score is another way to compare choices.
+
+K-Means is sensitive to the starting centroids, so libraries run it several times and keep the best result; the k-means++ initialisation spreads the starting centroids out. Because it uses distances, features should be scaled to similar ranges first.
+
+K-Means assumes roughly round clusters of similar size. A practical example is grouping students by study behaviour, such as login frequency and quiz scores, to offer different kinds of support.
+
+Principal Component Analysis
+----------------------------
+
+Prerequisites: Linear Algebra Basics.
+
+Principal Component Analysis (PCA) reduces the number of features while keeping as much of the variation in the data as possible. It finds new axes, called principal components, that are combinations of the original features. The first principal component points in the direction of greatest variance, the second captures the most remaining variance while being perpendicular to the first, and so on.
+
+Mathematically, the principal components are the eigenvectors of the data's covariance matrix, and each eigenvalue tells how much variance its component explains. Keeping the top components that together explain, for example, 95 percent of the variance often removes most features with little information lost.
+
+Always standardise features before PCA, otherwise features measured in large units dominate. PCA is used to visualise high-dimensional data in two dimensions, to speed up training and to remove noise.
+
+The trade-off is interpretability: a principal component is a mix of many original features, so it rarely has a simple meaning. PCA also only captures linear structure.

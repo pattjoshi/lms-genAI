@@ -4,16 +4,22 @@ version = "0.1.0"
 requires-python = ">=3.12,<3.13"
 dependencies = [
     "asyncpg>=0.31.0",
+    "beautifulsoup4>=4.15.0",
     "faker>=40.40.0",
     "fastapi>=0.142.2",
     "langchain>=1.4.3",
     "langchain-core>=1.6.6",
     "langchain-openai>=1.6.7",
+    "langchain-text-splitters>=1.1.3",
     "langfuse>=4.16.0",
     "langgraph>=1.2.12",
     "neo4j>=6.3.1",
     "openai>=3.24.0",
     "pydantic-settings>=2.15.0",
+    "pypdf>=6.19.0",
+    "python-docx>=1.2.0",
+    "python-multipart>=0.0.32",
+    "pyyaml>=6.0.3",
     "qdrant-client>=1.19.1",
     "sqlalchemy[asyncio]>=2.1.3",
     "tzdata>=2026.5",
@@ -25,6 +31,7 @@ dev = [
     "httpx>=0.28.1",
     "pytest>=9.1.1",
     "pytest-asyncio>=1.4.0",
+    "reportlab>=5.0.1",
     "ruff>=0.16.10",
 ]
 
@@ -39,3 +46,6 @@ target-version = "py312"
 [tool.ruff.lint]
 select = ["E", "F", "I", "B", "UP"]
 ignore = ["B008"]  # FastAPI's Depends() in defaults is idiomatic
+
+[tool.ruff.lint.per-file-ignores]
+"app/prompts/*" = ["E501"]  # prompts are prose; wrapping lines would change the text the model sees
