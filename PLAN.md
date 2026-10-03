@@ -34,14 +34,21 @@ a pause so you can understand it before the next one.
 
 | # | Phase | GenAI concepts learned | Done when |
 |---|---|---|---|
-| 0 | **Skeleton** | Tokens & cost, LLM error handling (retry, backoff, circuit breaker, budget), tracing, "LLM is not a security boundary" | Each role logs in to its portal; first LLM call shows tokens/cost/latency in the UI and in Langfuse |
-| 1 | **Upload pipeline + basic RAG** | Parsing (keeping page numbers), chunking strategies, overlap, embeddings, cosine similarity, vector DB payloads, top-k, grounded prompts, streaming (SSE). Generated course files; start the 20-question eval set | A student gets a correct streamed answer from an uploaded PDF |
+| 0 ✅ | **Skeleton** | Tokens & cost, LLM error handling (retry, backoff, circuit breaker, budget), tracing, "LLM is not a security boundary" | Each role logs in to its portal; first LLM call shows tokens/cost/latency in the UI and in Langfuse |
+| 1 ✅ | **Upload pipeline + basic RAG** | Parsing (keeping page numbers), chunking strategies, overlap, embeddings, cosine similarity, vector DB payloads, top-k, grounded prompts, streaming (SSE). Generated course files; start the 20-question eval set | A student gets a correct streamed answer from an uploaded PDF |
 | 2 | **Better retrieval** | Metadata filtering, query rewriting, hybrid search (dense + sparse, RRF), reranking, citations, answer grading. Measure recall@k / MRR before & after | Answers cite file + page; students only see enrolled courses; numbers show the gain |
 | 3 | **Concept graph + learning paths** | Structured extraction (JSON schema + validation), entity dedup, graph modelling, Cypher traversal, GraphRAG-lite, quiz generation, human approval | "I don't understand X" returns a sensible study order from approved concepts |
 | 4 | **Routing + agent** | Intent routing (rules vs embeddings vs LLM), tool calling, LangGraph state machine, short/long-term memory, confidence scoring | Each question goes to the right tool; decisions visible in traces |
 | 5 | **Tickets + feedback loop** | Human in the loop, context packaging, knowledge feedback, clustering questions with embeddings | A resolved ticket's answer is used by the AI next time |
 | 6 | **SQL agent (all roles, scoped)** | Schema-aware prompting, few-shot, self-correction loop, SELECT-only validation, read-only DB user, row-level security, chart choice | Plain English → SQL → answer + chart; can't write; can't escape scope |
 | 7 | **Evaluation, guardrails, tracing** | RAG metrics (context precision/recall, faithfulness, relevance), LLM-as-judge and its biases, injection & off-topic guardrails, cost/latency dashboards | One command runs the eval and shows better/worse |
+
+**Phase 1 note:** the enrolled-course filter on retrieval is already in Phase 1, because it is a
+**security** rule (students must never see other courses' material), not a feature. Phase 2 adds the
+user-facing filters (module, file type) on top of it.
+
+**File types:** `.doc` (old binary Word) is rejected with a "save as .docx" message; scanned PDFs (no
+text layer) are rejected with an OCR hint. Both are deliberate scope limits.
 
 ---
 
@@ -180,14 +187,21 @@ backend/            FastAPI app (uv project)
     permissions.py  permission matrix
     scopes.py       permission matrix -> SQL filters
     auth.py         dummy login
-    llm/            the one door to the LLM: retry, breaker, budget, tracing
+    llm/            the one door to the LLM: chat, streaming, embeddings + retry, breaker, budget, tracing
     prompts/        every prompt, one file per feature
+    ingest/         parse -> chunk -> embed -> tag -> index (Phase 1)
+    rag/            Qdrant access + retriever (Phase 1)
+    evals/          retrieval eval (python -m app.evals.retrieval)
     routers/        API endpoints
     seed/           dummy data (python -m app.seed --reset)
+  scripts/          generate_course_files.py (renders data/course_source -> data/course_files)
   tests/
 frontend/           Next.js app (login + 4 portals)
-data/               seed stories (later: generated course files)
-evals/              attack questions (later: eval sets)
+data/
+  course_source/    course content as markdown (64 topics, with prerequisites)
+  course_files/     the same content as 6 PDF, 6 DOCX, 6 HTML, 6 TXT files
+  seed_stories.md   planted facts in the seed data
+evals/              attack questions, retrieval questions
 docs/               learning notes per phase
 docker-compose.yml  Postgres, Qdrant, Neo4j
 ```

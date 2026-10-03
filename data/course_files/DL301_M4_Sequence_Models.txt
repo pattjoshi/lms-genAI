@@ -1,0 +1,34 @@
+DL301 - Sequence Models
+=======================
+
+Text, speech and time series are sequences, where order matters and lengths vary. This module covers recurrent networks and the LSTM, which dominated sequence modelling before transformers.
+
+Recurrent Neural Networks
+-------------------------
+
+Prerequisites: Backpropagation.
+
+A recurrent neural network (RNN) processes a sequence one element at a time while keeping a hidden state, a vector that acts as memory of everything seen so far. At each time step the new hidden state is computed from the current input and the previous hidden state, using the same weights at every step.
+
+Because weights are shared across time, an RNN can handle sequences of any length. Typical uses are language modelling (predicting the next word), sentiment classification and time-series forecasting.
+
+RNNs are trained with backpropagation through time (BPTT): the network is unrolled across the time steps and ordinary backpropagation is applied to the unrolled graph.
+
+The big weakness is long-range memory. During BPTT the gradient is multiplied by the same weights again and again, so over long sequences it tends to vanish (or explode). In practice a plain RNN struggles to connect information more than roughly 10 to 20 steps apart, such as remembering the subject of a long sentence.
+
+LSTM
+----
+
+Prerequisites: Recurrent Neural Networks.
+
+The Long Short-Term Memory network (LSTM), introduced by Hochreiter and Schmidhuber in 1997, solves the vanishing gradient problem of plain RNNs. Besides the hidden state, it keeps a separate cell state that runs through the sequence with only small, controlled changes, acting like a conveyor belt for long-term information.
+
+Three gates control the cell state. Each gate is a sigmoid layer that outputs values between 0 and 1, acting as a soft switch:
+
+* The forget gate decides what to remove from the cell state.
+* The input gate decides what new information to add.
+* The output gate decides what part of the cell state to expose as the hidden state.
+
+Because information can flow through the cell state largely unchanged, gradients survive across many more time steps. The GRU (Gated Recurrent Unit) is a simpler variant with two gates, update and reset, that often performs similarly with fewer parameters.
+
+LSTMs powered machine translation and speech recognition in the 2010s. Their sequential nature makes them slow to train on long sequences, which is the main reason attention-based transformers replaced them.

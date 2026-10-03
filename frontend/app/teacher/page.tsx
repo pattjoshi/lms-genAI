@@ -1,6 +1,7 @@
 "use client";
 
-import { BookOpen } from "lucide-react";
+import { ArrowRight, BookOpen, Upload } from "lucide-react";
+import Link from "next/link";
 
 import { AiHelloCard } from "@/components/AiHelloCard";
 import { PermissionTestCard } from "@/components/PermissionTestCard";
@@ -41,7 +42,9 @@ function TeacherHome() {
             <Stat label="Dropped" value={c.dropped} />
           </div>
           <p className="mt-5 text-sm font-medium text-fg">Hardest topics</p>
-          <p className="text-xs text-muted">Lowest average quiz score. Phase 5 adds the doubts students ask about them.</p>
+          <p className="text-xs text-muted">
+            Lowest average quiz score. Phase 5 adds the doubts students ask about them.
+          </p>
           <ul className="mt-2 divide-y divide-line">
             {c.hardest_topics.map((t) => (
               <li key={t.topic} className="flex items-center justify-between py-2.5 text-sm">
@@ -61,6 +64,19 @@ export default function TeacherPage() {
     <PortalShell role="teacher">
       {() => (
         <>
+          <Link
+            href="/teacher/files"
+            className="group flex items-center gap-4 rounded-2xl border border-brand/30 bg-brand-soft p-5 transition hover:border-brand"
+          >
+            <span className="flex h-11 w-11 items-center justify-center rounded-xl bg-brand text-brand-fg">
+              <Upload className="h-5 w-5" />
+            </span>
+            <div className="flex-1">
+              <p className="font-display font-semibold text-fg">Course files</p>
+              <p className="text-sm text-muted">Upload notes and see exactly how the AI chunks and tags them.</p>
+            </div>
+            <ArrowRight className="h-5 w-5 text-brand-ink transition group-hover:translate-x-1" />
+          </Link>
           <TeacherHome />
           <PermissionTestCard />
           <AiHelloCard />

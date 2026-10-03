@@ -14,7 +14,9 @@ from sqlalchemy import func, select, text
 from sqlalchemy.exc import OperationalError
 
 from app import models  # noqa: F401 - registers all tables on Base.metadata
+from app.config import get_settings
 from app.db import Base, SessionLocal, engine
+from app.rag import vectorstore
 from app.seed.build import build_seed
 
 SEQUENCE_TABLES = [
@@ -30,7 +32,24 @@ SEQUENCE_TABLES = [
 ]
 
 
+async def _reset_derived_stores() -> None:
+    """--reset also clears what was built from the old data: Qdrant vectors and uploaded files."""
+    try:
+        await vectorstore.drop_collection()
+        await vectorstore.close()
+        print("Cleared Qdrant collection.")
+    except Exception as exc:  # noqa: BLE001
+        print(f"Warning: could not clear Qdrant ({exc}). Is it running?", file=sys.stderr)
+    upload_dir = get_settings().upload_dir
+    if upload_dir.exists():
+        for f in upload_dir.iterdir():
+            if f.is_file():
+                f.unlink()
+
+
 async def main(reset: bool) -> int:
+    if reset:
+        await _reset_derived_stores()
     try:
         async with engine.begin() as conn:
             if reset:

@@ -1,0 +1,30 @@
+NLP302 - Modern NLP
+===================
+
+Today's NLP applications start from huge pre-trained models and adapt them. This module covers how those models are built and how to ground them in your own documents.
+
+Pretrained Language Models
+--------------------------
+
+Prerequisites: Transformers.
+
+A pretrained language model is a transformer trained on a very large text corpus with a self-supervised objective, which needs no human labels. GPT-style models are trained to predict the next token. BERT is trained with masked language modelling: about 15 percent of tokens are hidden and the model predicts them from both sides of the context.
+
+Pretraining gives the model general knowledge of language and the world. It is then adapted to tasks. Fine-tuning continues training on a smaller labelled dataset. Instruction tuning fine-tunes on examples of instructions and good responses, and reinforcement learning from human feedback (RLHF) further aligns the model with human preferences. These steps turn a raw text predictor into a helpful assistant.
+
+Large models can also be adapted without any training through prompting. Zero-shot prompting just describes the task; few-shot prompting includes a few worked examples in the prompt, which the model imitates. This ability is called in-context learning.
+
+Limitations matter in practice. Models have a knowledge cutoff and do not know events after their training data. They can hallucinate, confidently generating plausible but false statements. And they have a limited context window, measured in tokens.
+
+Retrieval-Augmented Generation
+------------------------------
+
+Prerequisites: Pretrained Language Models, Word Embeddings.
+
+Retrieval-Augmented Generation (RAG) reduces hallucination and adds private or recent knowledge by retrieving relevant documents and giving them to the language model as context. The model is instructed to answer only from that context and to cite its sources.
+
+A RAG system has two pipelines. The indexing pipeline parses documents, splits them into chunks, converts each chunk into an embedding, and stores the vectors with metadata in a vector database. The query pipeline embeds the user's question, retrieves the most similar chunks, builds a prompt containing them, and asks the model to answer.
+
+Chunk size is a key design choice. Small chunks are precise but can lose context; large chunks keep context but dilute relevance and cost more tokens. Overlap between neighbouring chunks prevents ideas from being cut in half.
+
+Quality depends heavily on retrieval. If the right chunk is not retrieved, even the best model cannot answer correctly. Common improvements include metadata filtering, hybrid search that combines keyword (BM25) and vector search, reranking retrieved chunks with a cross-encoder, and query rewriting. A RAG system should be evaluated separately on retrieval quality, such as recall at k, and on answer quality, such as faithfulness to the retrieved context.

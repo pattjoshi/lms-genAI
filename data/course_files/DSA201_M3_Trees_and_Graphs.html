@@ -1,0 +1,31 @@
+<!doctype html>
+<html lang="en"><head><meta charset="utf-8">
+<title>DSA201 - Trees and Graphs</title>
+<style>body{font-family:Georgia,serif;max-width:46rem;margin:2rem auto;line-height:1.6}code{background:#f3f3f3;padding:0 .2em}nav{font-size:.9em;color:#666}</style>
+</head><body>
+<nav>Course DSA201 &middot; course notes</nav>
+<h1>Trees and Graphs</h1>
+<p>Trees and graphs model hierarchies and networks: file systems, organisation charts, road maps, and the prerequisite graph of this course itself.</p>
+<section><h2>Binary Trees</h2>
+<p>Prerequisites: Recursion, Linked Lists.</p>
+<p>A binary tree is a set of nodes where each node has at most two children, called left and right. The top node is the root; nodes without children are leaves. The height of a tree is the number of edges on the longest path from the root to a leaf.</p>
+<p>Trees are naturally recursive: each child is itself the root of a smaller subtree. That is why most tree algorithms are short recursive functions.</p>
+<p>There are three depth-first traversal orders. Pre-order visits the node, then the left subtree, then the right subtree. In-order visits the left subtree, then the node, then the right subtree. Post-order visits both subtrees and then the node. Level-order traversal visits the tree level by level using a queue.</p>
+<p>A full binary tree has nodes with either zero or two children. A complete binary tree fills every level except possibly the last, which is filled from the left; heaps are stored as complete binary trees in an array. A balanced tree keeps its height close to log n.</p>
+</section>
+<section><h2>Binary Search Trees</h2>
+<p>Prerequisites: Binary Trees.</p>
+<p>A binary search tree (BST) is a binary tree with an ordering rule: for every node, all values in its left subtree are smaller and all values in its right subtree are larger. This rule lets you search like binary search: compare with the current node and go left or right.</p>
+<p>Search, insert and delete take O(h) time, where h is the height. In a balanced BST the height is about log n, so operations are O(log n). But inserting already sorted data into a plain BST creates a long chain, effectively a linked list, and operations degrade to O(n).</p>
+<p>Self-balancing trees such as AVL trees and red-black trees fix this by rotating nodes after inserts and deletes to keep the height logarithmic. Many language libraries use red-black trees for ordered maps.</p>
+<p>An in-order traversal of a BST visits values in sorted order. Deleting a node with two children replaces it with its in-order successor, the smallest value in its right subtree. Database B-tree indexes are a generalisation of the same idea with many keys per node.</p>
+</section>
+<section><h2>Graph Traversal BFS and DFS</h2>
+<p>Prerequisites: Stacks and Queues, Recursion.</p>
+<p>A graph is a set of vertices connected by edges. Edges can be directed or undirected, and weighted or unweighted. Graphs are stored as an adjacency list, which maps each vertex to its neighbours and suits sparse graphs, or as an adjacency matrix, which suits dense graphs.</p>
+<p>Breadth-First Search (BFS) explores the graph level by level using a queue: first all neighbours of the start vertex, then their neighbours, and so on. In an unweighted graph, BFS finds the shortest path, measured in number of edges.</p>
+<p>Depth-First Search (DFS) goes as deep as possible along one path before backtracking, using a stack or recursion. DFS is used for detecting cycles, finding connected components and topological sorting.</p>
+<p>Both visit every vertex and edge once, so both run in O(V + E) time. Both need a visited set; without it, any cycle makes the traversal loop forever.</p>
+<p>Topological sort orders the vertices of a directed acyclic graph so that every edge points forward. A learning path is exactly that: a topological order of a prerequisite graph, so that each topic comes after everything it depends on.</p>
+</section>
+<footer><p>&copy; LMS GenAI demo content</p></footer></body></html>

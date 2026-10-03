@@ -1,0 +1,23 @@
+<!doctype html>
+<html lang="en"><head><meta charset="utf-8">
+<title>NLP302 - Attention and Transformers</title>
+<style>body{font-family:Georgia,serif;max-width:46rem;margin:2rem auto;line-height:1.6}code{background:#f3f3f3;padding:0 .2em}nav{font-size:.9em;color:#666}</style>
+</head><body>
+<nav>Course NLP302 &middot; course notes</nav>
+<h1>Attention and Transformers</h1>
+<p>Attention lets a model look directly at any part of the input instead of squeezing everything through a single memory vector. Transformers are built entirely on it.</p>
+<section><h2>Attention Mechanism</h2>
+<p>Prerequisites: Word Embeddings, Recurrent Neural Networks.</p>
+<p>Early neural translation used an encoder RNN to compress the whole source sentence into one fixed vector and a decoder RNN to generate the translation from it. Long sentences did not fit well into that single vector, and quality dropped as sentences got longer.</p>
+<p>Attention, introduced by Bahdanau and colleagues in 2014, lets the decoder look back at all encoder states at every step and decide which ones are relevant right now. It computes a score between the current decoder state and each encoder state, turns the scores into weights with softmax, and takes the weighted average of the encoder states as context.</p>
+<p>In modern notation, attention uses queries, keys and values. Each query is compared with every key using a dot product; the scores are scaled, passed through softmax, and used to weight the values. Scaled dot-product attention divides the scores by the square root of the key dimension to keep the softmax from becoming too peaked.</p>
+<p>Self-attention applies the same idea within one sequence: every word attends to every other word in the same sentence, so "it" can be linked directly to the noun it refers to, however far away. The attention weights can also be inspected to see what the model focused on.</p>
+</section>
+<section><h2>Transformers</h2>
+<p>Prerequisites: Attention Mechanism.</p>
+<p>The transformer architecture was introduced in the 2017 paper "Attention Is All You Need" by Vaswani and colleagues. It removes recurrence completely and relies on self-attention, which lets all positions be processed in parallel on GPUs. That made training on huge datasets practical.</p>
+<p>Multi-head attention runs several attention operations in parallel, each with its own learned projections, so different heads can focus on different relationships such as syntax or coreference. Because attention itself ignores word order, positional encodings are added to the input embeddings to tell the model where each token is.</p>
+<p>Each transformer layer combines multi-head self-attention and a feed-forward network, each wrapped with a residual connection and layer normalisation. The original model had an encoder stack and a decoder stack for translation.</p>
+<p>Three families followed. Encoder-only models such as BERT are strong at understanding tasks like classification and search. Decoder-only models such as GPT generate text one token at a time and power today's chat assistants. Encoder-decoder models such as T5 suit translation and summarisation. The main cost of self-attention is that it grows quadratically with sequence length, which limits the context window.</p>
+</section>
+<footer><p>&copy; LMS GenAI demo content</p></footer></body></html>

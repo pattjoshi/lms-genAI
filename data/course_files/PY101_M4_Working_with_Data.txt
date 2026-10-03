@@ -1,0 +1,43 @@
+PY101 - Working with Data
+=========================
+
+Real programs read data from files and analyse it. This module covers file handling and the two libraries at the heart of data work in Python: NumPy and Pandas.
+
+File Handling
+-------------
+
+Prerequisites: Exceptions.
+
+The built-in open() function opens a file and returns a file object. The mode argument decides what you can do: "r" reads (the default), "w" writes and replaces the file, "a" appends to the end, and adding "b" works with binary data such as images.
+
+Always open files with a with statement, for example with open("marks.txt") as f:. The with block is a context manager that closes the file automatically, even if an exception happens inside the block.
+
+For text files, pass an explicit encoding such as encoding="utf-8", otherwise Windows may use a different default and non-English characters can break. Reading options include f.read() for the whole file, f.readline() for one line, and looping over the file object to process one line at a time, which uses little memory for large files.
+
+For structured data, use the csv module for CSV files and the json module for JSON. Wrap file operations in try and except to handle FileNotFoundError and PermissionError gracefully.
+
+NumPy Basics
+------------
+
+Prerequisites: Lists and Tuples.
+
+NumPy provides the ndarray, a fast multi-dimensional array of numbers of one type. A NumPy array is much faster than a Python list for numeric work because the data is stored in one contiguous block of memory and operations run in optimised C code.
+
+Create arrays with np.array([1, 2, 3]), np.zeros((3, 4)) or np.arange(10). Every array has a shape, for example (3, 4) for 3 rows and 4 columns, and a dtype such as float64.
+
+Vectorisation means applying an operation to the whole array at once: marks * 1.1 multiplies every element without a Python loop. Broadcasting lets NumPy combine arrays of different shapes, for example adding a row of 4 values to every row of a 3 by 4 matrix.
+
+Useful functions include mean, sum, max, argmax and reshape. The matrix product of two arrays is written A @ B. NumPy is the foundation of the linear algebra used in the Machine Learning course.
+
+Pandas Basics
+-------------
+
+Prerequisites: NumPy Basics, Dictionaries and Sets.
+
+Pandas adds labelled tables to Python. Its two main types are the Series, a labelled one-dimensional array, and the DataFrame, a table with named columns, where each column is a Series. Under the hood, columns are NumPy arrays.
+
+Load data with pd.read_csv("students.csv") and inspect it with df.head(), df.info() and df.describe(). Select a column with df["city"] and filter rows with a boolean condition such as df[df["score"] < 50].
+
+Use loc to select by label and iloc to select by integer position. groupby splits the table into groups and aggregates them, for example df.groupby("course")["score"].mean() gives the average score per course, the same idea as GROUP BY in SQL.
+
+Missing values appear as NaN. Find them with isna(), drop them with dropna() or fill them with fillna(). Combine tables with merge, which works like a SQL join.

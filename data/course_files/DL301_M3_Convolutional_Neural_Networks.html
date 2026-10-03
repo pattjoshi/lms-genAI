@@ -1,0 +1,29 @@
+<!doctype html>
+<html lang="en"><head><meta charset="utf-8">
+<title>DL301 - Convolutional Neural Networks</title>
+<style>body{font-family:Georgia,serif;max-width:46rem;margin:2rem auto;line-height:1.6}code{background:#f3f3f3;padding:0 .2em}nav{font-size:.9em;color:#666}</style>
+</head><body>
+<nav>Course DL301 &middot; course notes</nav>
+<h1>Convolutional Neural Networks</h1>
+<p>Convolutional neural networks (CNNs) are designed for grid data such as images. They exploit the fact that useful patterns, like edges, are local and can appear anywhere in the image.</p>
+<section><h2>Convolution</h2>
+<p>Prerequisites: Linear Algebra Basics.</p>
+<p>A convolution slides a small matrix of weights, called a filter or kernel, across the image. At each position it computes the dot product between the filter and the patch of image under it, producing one number. Doing this at every position gives a new grid called a feature map.</p>
+<p>A typical filter is 3 by 3. One filter might respond to vertical edges, another to horizontal edges. In a CNN the filter values are not hand-designed: they are weights learned by backpropagation.</p>
+<p>Two settings control the output size. The stride is how many pixels the filter moves each step; a stride of 2 halves the width and height. Padding adds a border of zeros so the filter can be centred on edge pixels; "same" padding keeps the output the same size as the input.</p>
+<p>Convolution has two big advantages over a fully connected layer. Parameter sharing: the same small filter is used everywhere, so a 3 by 3 filter has only 9 weights regardless of image size. Translation equivariance: a pattern is detected wherever it appears.</p>
+</section>
+<section><h2>Pooling</h2>
+<p>Prerequisites: Convolution.</p>
+<p>A pooling layer shrinks feature maps by summarising small regions. Max pooling, the most common type, takes the maximum value in each window; with a 2 by 2 window and a stride of 2, it halves the width and height and keeps only a quarter of the values. Average pooling takes the mean instead.</p>
+<p>Pooling has no weights to learn. It reduces computation and memory for later layers, and it makes the network more tolerant of small shifts in the position of a feature, because the maximum in a window stays the same if the feature moves slightly.</p>
+<p>Global average pooling averages each entire feature map into a single number. Modern architectures often use it just before the final classification layer instead of large fully connected layers, which reduces parameters and overfitting.</p>
+<p>Some recent designs replace pooling with convolutions that use a stride of 2, letting the network learn its own way of downsampling.</p>
+</section>
+<section><h2>CNN Architectures</h2>
+<p>Prerequisites: Convolution, Pooling, Backpropagation.</p>
+<p>A classic CNN stacks blocks of convolution, activation (ReLU) and pooling. Early layers detect simple patterns such as edges, middle layers combine them into textures and shapes, and deep layers detect whole objects. A final fully connected layer with softmax produces class probabilities.</p>
+<p>Milestones: LeNet-5 (1998) recognised handwritten digits. AlexNet (2012) won the ImageNet competition by a large margin using ReLU, dropout and GPUs, starting the deep learning boom. VGG showed that stacks of small 3 by 3 filters work well. ResNet (2015) introduced residual connections, or skip connections, which add a layer's input to its output. This lets gradients flow through very deep networks and solved the degradation problem, making networks with more than 100 layers trainable.</p>
+<p>In practice you rarely train a CNN from scratch. Transfer learning takes a network pre-trained on a large dataset such as ImageNet and fine-tunes it on your smaller dataset, which needs far less data and compute.</p>
+</section>
+<footer><p>&copy; LMS GenAI demo content</p></footer></body></html>

@@ -18,29 +18,33 @@ import {
 
 import type { Role } from "./session";
 
-export type NavItem = { label: string; icon: LucideIcon; phase?: number }; // phase = not built yet
+// Phase whose features are built. Roadmap items up to this phase show as "Live".
+export const CURRENT_PHASE = 1;
+
+// href = page exists; phase = arrives in that phase (greyed out until then)
+export type NavItem = { label: string; icon: LucideIcon; href?: string; phase?: number };
 
 export const NAV: Record<Role, NavItem[]> = {
   student: [
-    { label: "Dashboard", icon: LayoutDashboard },
-    { label: "Ask a doubt", icon: MessageCircleQuestion, phase: 1 },
+    { label: "Dashboard", icon: LayoutDashboard, href: "/student" },
+    { label: "Ask a doubt", icon: MessageCircleQuestion, href: "/student/ask" },
     { label: "Learning path", icon: Route, phase: 3 },
     { label: "Practice", icon: Dumbbell, phase: 4 },
     { label: "My tickets", icon: Ticket, phase: 5 },
   ],
   teacher: [
-    { label: "Dashboard", icon: LayoutDashboard },
-    { label: "Course files", icon: Upload, phase: 1 },
+    { label: "Dashboard", icon: LayoutDashboard, href: "/teacher" },
+    { label: "Course files", icon: Upload, href: "/teacher/files" },
     { label: "Concept graph", icon: Network, phase: 3 },
     { label: "Quizzes", icon: ListChecks, phase: 3 },
     { label: "Doubt insights", icon: BookOpen, phase: 5 },
   ],
   support: [
-    { label: "Dashboard", icon: LayoutDashboard },
+    { label: "Dashboard", icon: LayoutDashboard, href: "/support" },
     { label: "Ticket queue", icon: Inbox, phase: 5 },
   ],
   admin: [
-    { label: "Dashboard", icon: LayoutDashboard },
+    { label: "Dashboard", icon: LayoutDashboard, href: "/admin" },
     { label: "Ask the data", icon: ChartColumn, phase: 6 },
     { label: "AI quality & cost", icon: Gauge, phase: 7 },
   ],

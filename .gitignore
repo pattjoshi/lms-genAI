@@ -18,3 +18,9 @@ node_modules/
 .idea/
 .DS_Store
 Thumbs.db
+
+# Uploaded course files (backend/storage)
+backend/storage/
+
+# Eval run outputs
+evals/results/

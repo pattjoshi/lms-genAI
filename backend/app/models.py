@@ -8,6 +8,7 @@ from datetime import datetime
 from enum import StrEnum
 
 from sqlalchemy import (
+    JSON,
     Boolean,
     DateTime,
     Enum,
@@ -205,3 +206,84 @@ class LLMUsage(Base):
     attempts: Mapped[int] = mapped_column(Integer, default=1, comment="1 = no retries were needed")
     status: Mapped[str] = mapped_column(String(20), comment="success | error")
     error_code: Mapped[str | None] = mapped_column(String(60))
+
+
+# ---------------------------------------------------------------------------
+# Phase 1: uploaded course files, their chunks, and students' doubts
+# ---------------------------------------------------------------------------
+
+
+class DocumentStatus(StrEnum):
+    uploaded = "uploaded"
+    parsing = "parsing"
+    chunking = "chunking"
+    embedding = "embedding"
+    tagging = "tagging"
+    indexing = "indexing"
+    ready = "ready"
+    failed = "failed"
+
+
+class Document(Base):
+    __tablename__ = "documents"
+    __table_args__ = {
+        "comment": "A course file uploaded by a teacher (PDF, DOCX, HTML or TXT) and its processing state."
+    }
+
+    id: Mapped[int] = mapped_column(primary_key=True)
+    course_id: Mapped[int] = mapped_column(ForeignKey("courses.id"))
+    module_id: Mapped[int] = mapped_column(ForeignKey("modules.id"))
+    uploaded_by: Mapped[int] = mapped_column(ForeignKey("users.id"))
+    file_name: Mapped[str] = mapped_column(String(255), comment="Original file name shown in citations")
+    file_type: Mapped[str] = mapped_column(String(10), comment="pdf | docx | html | txt")
+    stored_path: Mapped[str] = mapped_column(String(500))
+    sha256: Mapped[str] = mapped_column(String(64), comment="Content hash, used to reject duplicate uploads")
+    size_bytes: Mapped[int] = mapped_column(Integer)
+    status: Mapped[DocumentStatus] = mapped_column(_enum(DocumentStatus), default=DocumentStatus.uploaded)
+    error: Mapped[str | None] = mapped_column(Text)
+    num_pages: Mapped[int | None] = mapped_column(Integer, comment="PDF pages; null for other types")
+    num_chunks: Mapped[int] = mapped_column(Integer, default=0)
+    embed_tokens: Mapped[int] = mapped_column(Integer, default=0)
+    embed_cost_usd: Mapped[float] = mapped_column(Float, default=0.0)
+    created_at: Mapped[datetime] = mapped_column(DateTime(timezone=True), server_default=func.now())
+    processed_at: Mapped[datetime | None] = mapped_column(DateTime(timezone=True))
+
+
+class Chunk(Base):
+    __tablename__ = "chunks"
+    __table_args__ = {
+        "comment": "A piece of a document as stored in Qdrant. Postgres keeps the text for preview and evals."
+    }
+
+    id: Mapped[int] = mapped_column(primary_key=True)
+    document_id: Mapped[int] = mapped_column(ForeignKey("documents.id", ondelete="CASCADE"))
+    chunk_index: Mapped[int] = mapped_column(Integer, comment="0-based position inside the document")
+    text: Mapped[str] = mapped_column(Text)
+    page: Mapped[int | None] = mapped_column(Integer, comment="1-based PDF page; null for other file types")
+    section: Mapped[str | None] = mapped_column(String(255), comment="Heading the chunk falls under, if any")
+    topic: Mapped[str | None] = mapped_column(String(120), comment="Auto-tagged topic name (topics.name)")
+    difficulty: Mapped[str | None] = mapped_column(String(20))
+    topic_score: Mapped[float | None] = mapped_column(
+        Float, comment="Similarity to the tagged topic (1.0 = matched by heading)"
+    )
+    point_id: Mapped[str] = mapped_column(String(36), comment="Qdrant point id (UUID)")
+
+
+class Doubt(Base):
+    __tablename__ = "doubts"
+    __table_args__ = {"comment": "Every question a student asked the assistant, with the answer and how it went."}
+
+    id: Mapped[int] = mapped_column(primary_key=True)
+    student_id: Mapped[int] = mapped_column(ForeignKey("users.id"))
+    question: Mapped[str] = mapped_column(Text)
+    answer: Mapped[str | None] = mapped_column(Text)
+    status: Mapped[str] = mapped_column(String(20), comment="answered | no_context | error")
+    top_score: Mapped[float | None] = mapped_column(
+        Float, comment="Best retrieval similarity; low = likely content gap"
+    )
+    sources: Mapped[list | None] = mapped_column(JSON, comment="Retrieved chunks shown as citations")
+    input_tokens: Mapped[int] = mapped_column(Integer, default=0)
+    output_tokens: Mapped[int] = mapped_column(Integer, default=0)
+    cost_usd: Mapped[float] = mapped_column(Float, default=0.0)
+    latency_ms: Mapped[int] = mapped_column(Integer, default=0)
+    created_at: Mapped[datetime] = mapped_column(DateTime(timezone=True), server_default=func.now())

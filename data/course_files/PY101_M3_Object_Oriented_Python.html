@@ -1,0 +1,30 @@
+<!doctype html>
+<html lang="en"><head><meta charset="utf-8">
+<title>PY101 - Object-Oriented Python</title>
+<style>body{font-family:Georgia,serif;max-width:46rem;margin:2rem auto;line-height:1.6}code{background:#f3f3f3;padding:0 .2em}nav{font-size:.9em;color:#666}</style>
+</head><body>
+<nav>Course PY101 &middot; course notes</nav>
+<h1>Object-Oriented Python</h1>
+<p>Object-oriented programming (OOP) groups data and the functions that work on it into objects. Python supports OOP fully, and most libraries you will use, from Pandas to LangChain, are built from classes.</p>
+<section><h2>Classes and Objects</h2>
+<p>Prerequisites: Functions, Dictionaries and Sets.</p>
+<p>A class is a blueprint; an object is one instance built from it. You define a class with the <code>class</code> keyword. The special method <code>__init__</code> runs when a new object is created and sets its attributes, for example <code>self.name = name</code>.</p>
+<p>The first parameter of every instance method is <code>self</code>, which refers to the object the method was called on. Python passes it automatically, so <code>riya.enroll("ML201")</code> is really <code>Student.enroll(riya, "ML201")</code>.</p>
+<p>Attributes stored on <code>self</code> belong to one object, while attributes defined directly in the class body are shared by all instances. Methods whose names start and end with double underscores, called dunder methods, customise built-in behaviour: <code>__str__</code> controls how an object prints and <code>__eq__</code> controls how two objects compare with ==.</p>
+<p>Encapsulation means hiding internal details behind methods. Python has no truly private attributes; by convention a leading underscore such as <code>_balance</code> means "internal, do not touch".</p>
+</section>
+<section><h2>Inheritance</h2>
+<p>Prerequisites: Classes and Objects.</p>
+<p>Inheritance lets a class reuse and extend another class. In <code>class Teacher(User):</code> the Teacher class inherits every attribute and method of User and can add its own. User is called the parent or base class and Teacher the child or subclass.</p>
+<p>A child class can override a parent method by defining a method with the same name. Inside the override, <code>super().method_name()</code> calls the parent's version so you can extend behaviour instead of replacing it completely. Calling <code>super().__init__()</code> in a child's constructor is the usual way to make sure the parent sets up its attributes.</p>
+<p>Polymorphism means code can work with any subclass through the parent's interface: a function that accepts a User works for Students and Teachers alike.</p>
+<p>Prefer composition (an object holding other objects) over deep inheritance trees. A useful test: inheritance should express an "is a" relationship, as in a Teacher is a User, while composition expresses "has a", as in a Course has Modules.</p>
+</section>
+<section><h2>Exceptions</h2>
+<p>Prerequisites: Control Flow, Classes and Objects.</p>
+<p>An exception is an error that happens while a program runs, such as dividing by zero (ZeroDivisionError) or opening a missing file (FileNotFoundError). If nothing handles it, the program stops and prints a traceback.</p>
+<p>You handle exceptions with <code>try</code> and <code>except</code>. Put the risky code in the try block and the recovery code in an except block that names the specific exception type. Catching every exception with a bare <code>except:</code> hides bugs and is considered bad practice.</p>
+<p>The <code>else</code> block runs only if no exception occurred, and <code>finally</code> always runs, which makes it the right place for clean-up such as closing a connection. You raise your own exceptions with <code>raise ValueError("marks must be between 0 and 100")</code>.</p>
+<p>Exceptions are classes, so you can define custom ones by inheriting from Exception, for example <code>class PaymentFailed(Exception): pass</code>. This is a practical use of inheritance.</p>
+</section>
+<footer><p>&copy; LMS GenAI demo content</p></footer></body></html>

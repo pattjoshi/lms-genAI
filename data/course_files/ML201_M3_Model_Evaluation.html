@@ -1,0 +1,30 @@
+<!doctype html>
+<html lang="en"><head><meta charset="utf-8">
+<title>ML201 - Model Evaluation</title>
+<style>body{font-family:Georgia,serif;max-width:46rem;margin:2rem auto;line-height:1.6}code{background:#f3f3f3;padding:0 .2em}nav{font-size:.9em;color:#666}</style>
+</head><body>
+<nav>Course ML201 &middot; course notes</nav>
+<h1>Model Evaluation</h1>
+<p>A model is only useful if it works on data it has never seen. This module covers how to test models honestly and how to measure their quality.</p>
+<section><h2>Train Test Split</h2>
+<p>Prerequisites: none beyond the idea of a dataset.</p>
+<p>Before training, split the data into a training set and a test set. A common ratio is 80 percent for training and 20 percent for testing. The model learns only from the training set, and the test set is used once at the end to estimate performance on new data.</p>
+<p>Evaluating on the training data is misleading because a model can simply memorise it. The test set must stay untouched during development; looking at it repeatedly while tuning is a form of data leakage.</p>
+<p>When you need to tune settings such as the learning rate, carve a third piece out of the training data called the validation set. Another option is k-fold cross-validation: split the data into k parts, train k times, each time holding out a different part, and average the scores. Five or ten folds are typical.</p>
+<p>For classification with uneven classes, use a stratified split so that each set keeps the same proportion of each class. For time-based data, split by time, never randomly, so the model is never trained on the future.</p>
+</section>
+<section><h2>Overfitting and Regularization</h2>
+<p>Prerequisites: Train Test Split, Linear Regression.</p>
+<p>Overfitting happens when a model learns the noise in the training data instead of the general pattern. The signature is a low training error with a much higher test error. Underfitting is the opposite: the model is too simple, and both errors are high.</p>
+<p>This is the bias-variance trade-off. A simple model has high bias and underfits; a very flexible model has high variance and overfits. The goal is the sweet spot in between.</p>
+<p>Regularization fights overfitting by adding a penalty on large weights to the loss. L2 regularization, also called Ridge, adds the sum of squared weights and shrinks all weights smoothly. L1 regularization, called Lasso, adds the sum of absolute weights and can push some weights to exactly zero, which performs feature selection. A hyperparameter, often called lambda or alpha, controls how strong the penalty is.</p>
+<p>Other remedies include collecting more data, using fewer features, early stopping and, in neural networks, dropout.</p>
+</section>
+<section><h2>Evaluation Metrics</h2>
+<p>Prerequisites: Logistic Regression.</p>
+<p>For classification, accuracy is the share of correct predictions, but it is misleading when classes are imbalanced: if only 2 percent of students fail, a model that always predicts "pass" is 98 percent accurate and useless.</p>
+<p>The confusion matrix counts true positives, false positives, true negatives and false negatives. Precision is the share of predicted positives that are really positive. Recall is the share of real positives that the model found. The F1 score is the harmonic mean of precision and recall and balances the two.</p>
+<p>Which metric matters depends on the cost of mistakes. For detecting students at risk of dropping out, missing a real case is worse than a false alarm, so recall is more important. For a spam filter, a false positive that hides a real email is costly, so precision matters more.</p>
+<p>ROC-AUC measures how well the model ranks positives above negatives across all thresholds; 0.5 is random and 1.0 is perfect. For regression, common metrics are MAE, MSE, RMSE and R squared.</p>
+</section>
+<footer><p>&copy; LMS GenAI demo content</p></footer></body></html>

@@ -6,8 +6,9 @@ Postgres row-level security so even LLM-written SQL can't escape them.
 """
 
 from sqlalchemy import Select, select
+from sqlalchemy.ext.asyncio import AsyncSession
 
-from app.models import Course, Enrollment, Role, User
+from app.models import Course, Enrollment, EnrollmentStatus, Role, User
 from app.permissions import PermissionDenied, Resource, Scope, scope_for
 
 
@@ -29,3 +30,27 @@ def student_list_query(user: User) -> Select[tuple[User]]:
             "Support staff can only see the student attached to a ticket (tickets arrive in Phase 5)."
         )
     raise PermissionDenied("You don't have access to student records.")
+
+
+async def _course_ids_for_scope(session: AsyncSession, user: User, scope: Scope) -> list[int]:
+    if scope == Scope.ALL:
+        return list((await session.scalars(select(Course.id))).all())
+    if scope == Scope.OWN_COURSES:
+        return list((await session.scalars(select(Course.id).where(Course.teacher_id == user.id))).all())
+    if scope == Scope.ENROLLED:
+        # Dropped enrollments lose access to the material; active and completed keep it.
+        query = select(Enrollment.course_id).where(
+            Enrollment.student_id == user.id, Enrollment.status != EnrollmentStatus.dropped
+        )
+        return list((await session.scalars(query)).all())
+    return []
+
+
+async def readable_course_ids(session: AsyncSession, user: User) -> list[int]:
+    """Courses whose material the user may read (used as a MANDATORY RAG retrieval filter)."""
+    return await _course_ids_for_scope(session, user, scope_for(user.role, Resource.COURSE_MATERIAL))
+
+
+async def manageable_course_ids(session: AsyncSession, user: User) -> list[int]:
+    """Courses the user may upload to / delete files from."""
+    return await _course_ids_for_scope(session, user, scope_for(user.role, Resource.MANAGE_MATERIAL))
