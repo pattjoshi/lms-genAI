@@ -292,6 +292,13 @@ class Doubt(Base):
         Float, comment="Best retrieval similarity; low = likely content gap"
     )
     sources: Mapped[list | None] = mapped_column(JSON, comment="Retrieved chunks shown as citations")
+    conversation_id: Mapped[str | None] = mapped_column(
+        String(64), index=True, comment="Chat the doubt belongs to; earlier turns help rewrite follow-ups"
+    )
+    search_query: Mapped[str | None] = mapped_column(
+        Text, comment="What was actually searched, when a rewrite changed the question"
+    )
+    top_rerank_score: Mapped[float | None] = mapped_column(Float, comment="Best reranker relevance (0-1)")
     input_tokens: Mapped[int] = mapped_column(Integer, default=0)
     output_tokens: Mapped[int] = mapped_column(Integer, default=0)
     cost_usd: Mapped[float] = mapped_column(Float, default=0.0)

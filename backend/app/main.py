@@ -4,6 +4,7 @@ Run (from backend/):  uv run uvicorn app.main:app --reload --port 8000
 API docs:             http://localhost:8000/docs
 """
 
+import asyncio
 import logging
 from contextlib import asynccontextmanager
 
@@ -11,7 +12,7 @@ from fastapi import FastAPI, Request
 from fastapi.exceptions import RequestValidationError
 from fastapi.middleware.cors import CORSMiddleware
 from fastapi.responses import JSONResponse
-from sqlalchemy import update
+from sqlalchemy import func, select, update
 from sqlalchemy.exc import OperationalError, ProgrammingError
 from starlette.exceptions import HTTPException
 
@@ -21,7 +22,7 @@ from app.db import engine
 from app.llm.errors import LLMError
 from app.llm.tracing import init_tracing, shutdown_tracing
 from app.permissions import PermissionDenied
-from app.rag import vectorstore
+from app.rag import reranker, vectorstore
 from app.routers import ai, auth, chat, data, documents, health, portal
 from app.schema import ensure_schema
 
@@ -46,6 +47,25 @@ async def _fail_interrupted_documents() -> None:
         log.warning("Could not check for interrupted documents: %s", exc)
 
 
+async def _check_search_index() -> None:
+    """Create the Qdrant collection if missing, and say clearly when a re-index is needed."""
+    try:
+        state = await vectorstore.ensure_collection()
+        if state == "ok" and await vectorstore.count_points() == 0:
+            async with engine.connect() as conn:
+                ready = await conn.scalar(
+                    select(func.count())
+                    .select_from(models.Document)
+                    .where(models.Document.status == models.DocumentStatus.ready)
+                )
+            if ready:
+                log.warning(
+                    "%d document(s) are ready but the search index is empty. %s", ready, vectorstore.REINDEX_HINT
+                )
+    except Exception as exc:  # noqa: BLE001
+        log.warning("Could not prepare the Qdrant collection at startup: %s", exc)
+
+
 @asynccontextmanager
 async def lifespan(_: FastAPI):
     init_tracing(settings)
@@ -57,11 +77,13 @@ async def lifespan(_: FastAPI):
     except Exception as exc:  # noqa: BLE001
         log.warning("Could not create/upgrade tables at startup: %s", exc)
     await _fail_interrupted_documents()
-    try:
-        await vectorstore.ensure_collection()
-    except Exception as exc:  # noqa: BLE001
-        log.warning("Could not prepare the Qdrant collection at startup: %s", exc)
+    await _check_search_index()
+    # Load the reranker in the background (the first run downloads ~80 MB), so the first
+    # question doesn't wait for it. Failures are only logged: answers work without it.
+    warm_up = asyncio.create_task(reranker.warm_up()) if settings.rag_rerank else None
     yield
+    if warm_up is not None and not warm_up.done():
+        warm_up.cancel()
     shutdown_tracing()
     await vectorstore.close()
     await engine.dispose()

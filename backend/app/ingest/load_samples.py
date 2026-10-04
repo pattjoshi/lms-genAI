@@ -34,6 +34,11 @@ async def main() -> int:
     init_tracing(get_settings())
     async with engine.begin() as conn:
         await ensure_schema(conn)  # works even if the backend hasn't been restarted since an update
+    if await vectorstore.ensure_collection() == "outdated":
+        print(f"The search index is in the Phase 1 format. {vectorstore.REINDEX_HINT}", file=sys.stderr)
+        await vectorstore.close()
+        await engine.dispose()
+        return 1
     files = sorted(p for p in SAMPLES_DIR.iterdir() if p.is_file())
     print(f"Found {len(files)} sample files in {SAMPLES_DIR}")
     total_chunks = total_tokens = 0

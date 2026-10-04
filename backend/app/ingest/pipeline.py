@@ -13,7 +13,6 @@ import uuid
 from datetime import UTC, datetime
 from pathlib import Path
 
-from qdrant_client import models as qm
 from sqlalchemy import delete, select
 from sqlalchemy.ext.asyncio import AsyncSession
 
@@ -26,7 +25,7 @@ from app.llm.errors import LLMError
 from app.llm.service import embed_texts
 from app.llm.tracing import observe, trace
 from app.models import Chunk, Course, Document, DocumentStatus, Module, Topic, User
-from app.rag import vectorstore
+from app.rag import sparse, vectorstore
 
 log = logging.getLogger(__name__)
 
@@ -50,7 +49,7 @@ async def process_document(document_id: int) -> None:
         except Exception as exc:  # noqa: BLE001 - every failure must end in a visible status
             await session.rollback()
             doc = await session.get(Document, document_id)
-            if isinstance(exc, (ParseError, LLMError)):
+            if isinstance(exc, (ParseError, LLMError, vectorstore.IndexOutdated)):
                 doc.error = getattr(exc, "user_message", None) or str(exc)
             else:
                 log.exception("Ingestion failed for document %s", document_id)
@@ -95,7 +94,8 @@ async def _run(session: AsyncSession, doc: Document, uploader: User | None) -> N
 
     # 5. Index: replace any previous chunks of this document (re-processing), then upsert
     await _set_status(session, doc, DocumentStatus.indexing)
-    await vectorstore.ensure_collection()
+    if await vectorstore.ensure_collection() != "ok":
+        raise vectorstore.IndexOutdated(vectorstore.IndexOutdated.user_message)  # check BEFORE deleting anything
     await vectorstore.delete_document(doc.id)
     await session.execute(delete(Chunk).where(Chunk.document_id == doc.id))
 
@@ -117,7 +117,8 @@ async def _run(session: AsyncSession, doc: Document, uploader: User | None) -> N
             "topic": tag.topic if tag else None,
             "difficulty": tag.difficulty if tag else None,
         }
-        points.append(qm.PointStruct(id=point_id, vector=vector, payload=payload))
+        # Two vectors per chunk: meaning (embedding) + keywords (BM25, computed locally, free)
+        points.append(vectorstore.point(point_id, vector, sparse.encode_document(draft.text), payload))
         rows.append(
             Chunk(
                 document_id=doc.id,

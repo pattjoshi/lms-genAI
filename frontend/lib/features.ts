@@ -19,7 +19,7 @@ import {
 import type { Role } from "./session";
 
 // Phase whose features are built. Roadmap items up to this phase show as "Live".
-export const CURRENT_PHASE = 1;
+export const CURRENT_PHASE = 2;
 
 // href = page exists; phase = arrives in that phase (greyed out until then)
 export type NavItem = { label: string; icon: LucideIcon; href?: string; phase?: number };

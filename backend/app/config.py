@@ -78,6 +78,18 @@ class Settings(BaseSettings):
     rag_min_score: float = 0.25  # below this cosine similarity a chunk counts as "not relevant"
     rag_max_output_tokens: int = 600
 
+    # --- Phase 2: better retrieval (each step can be switched off to measure it) ---
+    rag_hybrid: bool = True  # meaning (dense) + keyword (BM25) search, merged with RRF
+    rag_rerank: bool = True  # a local cross-encoder re-scores the candidates
+    rag_rewrite: bool = True  # follow-ups ("explain it again") -> standalone question
+    rag_corrective: bool = True  # nothing relevant found -> rewrite the query once and search again
+    rag_candidates: int = 20  # chunks fetched per search before reranking picks the best RAG_TOP_K
+    rag_rrf_k: int = 60  # RRF constant: higher = ranks matter less
+    rag_min_rerank_score: float = 0.02  # reranker relevance (0-1) below this = "not relevant"
+    rag_history_turns: int = 3  # previous questions of the same chat used to rewrite follow-ups
+    reranker_model: str = "Xenova/ms-marco-MiniLM-L-6-v2"  # ~80 MB, runs on CPU (ONNX)
+    model_cache_dir: Path = BACKEND_DIR / "storage" / "models"  # downloaded once, reused
+
     # --- Langfuse (tracing) ---
     langfuse_public_key: str | None = None
     langfuse_secret_key: SecretStr | None = None

@@ -30,6 +30,15 @@ RAG_USER = """<excerpts>
 
 Question: {question}"""
 
+# Phase 2: when a follow-up was rewritten ("give an example" -> "give an example of the
+# chain rule"), the model gets the standalone question AND the student's own words.
+RAG_USER_REWRITTEN = """<excerpts>
+{excerpts}
+</excerpts>
+
+Question: {question}
+(The student's exact words, as a follow-up in the conversation: "{original}")"""
+
 
 def format_excerpt(number: int, source: dict) -> str:
     where = f"page {source['page']}" if source.get("page") else (source.get("section") or "")

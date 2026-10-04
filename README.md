@@ -5,17 +5,28 @@ graph databases, query rewriting and routing, agents, human-in-the-loop, evaluat
 guardrails and tracing.
 
 - What we're building and why: [PLAN.md](PLAN.md)
-- What you learn in each phase: [docs/](docs/) (start with [docs/phase-0.md](docs/phase-0.md))
+- What you learn in each phase: [docs/](docs/) (start with [docs/phase-0.md](docs/phase-0.md); Phase 2: [docs/phase-2.md](docs/phase-2.md))
 - The planted "stories" in the dummy data: [data/seed_stories.md](data/seed_stories.md)
 - Interview prep per phase (approach, alternatives, cross-questions): [docs/interview/](docs/interview/)
 
-**Current phase: 1 (upload pipeline + basic RAG).** Teachers upload PDF/DOCX/HTML/TXT files that are
-parsed, chunked, embedded, tagged and stored in Qdrant; students ask doubts and get streamed answers
-with numbered sources (file + page). Phase 0 gave us dummy login, 4 portals, seed data and a safe LLM
-gateway (retries, circuit breaker, daily budget, Langfuse).
+**Current phase: 2 (better retrieval).** Hybrid search (meaning + BM25 keywords, fused with RRF), a local
+cross-encoder reranker, follow-up questions (query rewriting), a corrective retry, "Search in" filters, and
+a "Show details" panel that shows how each answer was found. Every step is measured with
+`uv run python -m app.evals.retrieval --compare`.
+Phase 1 gave us the upload pipeline and basic RAG; Phase 0 the dummy login, portals, seed data and a safe
+LLM gateway (retries, circuit breaker, daily budget, Langfuse).
 
-**Already set up Phase 0?** Just pull, then: `cd backend; uv sync`, restart the backend (new tables are
-created automatically), run `uv run python -m app.ingest.load_samples`, and `cd frontend; npm install`.
+**Upgrading from Phase 1?** Pull, then (from `backend/`):
+
+```powershell
+uv sync                                    # adds fastembed (reranker) and the stemmer
+uv run python -m app.ingest.reindex        # ONE time: rebuild the index with keyword vectors (~$0.001)
+uv run uvicorn app.main:app --reload --port 8000   # new DB columns are added automatically
+uv run python -m app.evals.retrieval --compare     # Phase 1 vs every Phase 2 step
+```
+
+The first start downloads the reranker model (~80 MB) into `backend/storage/models/`. Until it is there
+(or if the download fails) answers still work, just without reranking; `/health` shows `"reranker"`.
 
 ---
 
@@ -79,7 +90,7 @@ Admin UIs: Qdrant <http://localhost:6333/dashboard>, Neo4j <http://localhost:747
 ```powershell
 cd backend
 uv sync                                  # creates .venv and installs everything
-uv run pytest                            # 47 tests, no database or API key needed
+uv run pytest                            # 68 tests, no database or API key needed
 uv run python -m app.seed --reset        # create tables + load dummy data
 uv run python -m app.ingest.load_samples # index the 24 sample course files (~$0.0003 of embeddings)
 uv run uvicorn app.main:app --reload --port 8000
@@ -118,7 +129,19 @@ Open <http://localhost:3000>.
 12. In Langfuse, open the `rag_answer` trace: retrieve → generate, with the chunks and the full prompt.
 13. Measure retrieval: `uv run python -m app.evals.retrieval` (from `backend/`).
 
-Then work through the experiments in [docs/phase-0.md](docs/phase-0.md) and [docs/phase-1.md](docs/phase-1.md).
+**Phase 2:**
+
+14. As **Riya**, click **Show details**, then ask *"What is the chain rule?"* and follow up with
+    *"Can you show me a worked example?"*. The details panel says the follow-up was rewritten using the
+    chat, and shows each source's meaning rank, keyword rank, cosine and reranker score. **New chat** forgets
+    the context.
+15. Ask *"dying ReLU"* (a keyword question) and compare the meaning vs keyword ranks in the panel.
+16. Use **Search in** to limit a question to one course or module.
+17. Click a citation number like **1** in an answer: it jumps to that source.
+18. Run `uv run python -m app.evals.retrieval --compare` and read the table: which step fixed which questions?
+
+Then work through the experiments in [docs/phase-0.md](docs/phase-0.md), [docs/phase-1.md](docs/phase-1.md)
+and [docs/phase-2.md](docs/phase-2.md).
 
 ---
 
@@ -155,6 +178,9 @@ docker compose down                                          # stop databases (d
 | Upload `failed`: "No text found… scanned PDF" | The PDF is images only. OCR is out of scope; use a text PDF |
 | File stuck in `embedding`/`failed` with an AI error | Fix the key/budget issue, then click **Re-process** (↻) on the file |
 | Every answer says "I couldn't find this" | Did you run `load_samples`? Is Qdrant green? Is the student enrolled in that course? |
-| Changed `CHUNK_SIZE`/`CHUNK_OVERLAP` | Re-index: `uv run python -m app.seed --reset` then `load_samples` (or ↻ each file) |
+| Changed `CHUNK_SIZE`/`CHUNK_OVERLAP` | Re-index: `uv run python -m app.ingest.reindex --force` |
+| Answer error `reindex_needed` / "index is in the Phase 1 format" | Run once: `uv run python -m app.ingest.reindex` (from `backend/`) |
+| Details panel: "Reranker model could not be loaded" | First start needs internet to download the model (~80 MB, from Hugging Face). Check `/health` → `retrieval.reranker`; restart the backend once online. Answers work without it. Or set `RAG_RERANK=false` |
+| Follow-ups not understood | Ask them in the same chat (not after **New chat**). `RAG_REWRITE=true` in `.env` |
 | "Last 30 days" stories look wrong | Data dates are relative to when you seeded. Re-seed with `--reset` |
 | Start completely fresh | `docker compose down -v`, `docker compose up -d`, re-seed |
