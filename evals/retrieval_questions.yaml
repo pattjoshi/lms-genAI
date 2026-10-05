@@ -1,15 +1,23 @@
-# Retrieval eval set (Phase 1). Grows in Phase 2 and Phase 7.
+# Retrieval eval set. Phase 1: 20 + 2. Phase 2: 48 (grows again in Phase 7).
 #
 # For each question we know which course, module and topic contains the answer.
 # The eval checks whether retrieval puts a chunk of that topic in the top k results.
-# It does NOT call the chat model, so a full run costs only ~22 tiny embedding calls.
 #
-#   uv run python -m app.evals.retrieval          (from backend/)
+#   uv run python -m app.evals.retrieval              (from backend/)  current .env settings
+#   uv run python -m app.evals.retrieval --compare    every Phase 2 step on/off, side by side
 #
-# Note how questions are phrased like a student would ask, not copied from the text:
-# a good eval tests meaning, not keyword overlap.
+# Categories (each tests a different weakness):
+#   semantic    phrased like a student, not copied from the notes        (Phase 1 set)
+#   keyword     exact terms: code, acronyms, error names                 -> hybrid search helps
+#   paraphrase  describes the concept without naming it                  -> reranking / corrective retry help
+#   follow_up   only makes sense with the previous question (`history`)  -> query rewriting helps
+#   no_answer   not in any course: nothing may count as relevant
+#
+# Cost: dense-only modes call only the embeddings API (~$0.00001). Modes with rewriting
+# also make a few tiny chat calls (follow-ups + corrective retries), ~$0.001 in total.
 
 questions:
+  # ---------- semantic (Phase 1 set) ----------
   - id: R01
     question: "What's the difference between a list and a tuple in Python?"
     course: PY101
@@ -111,11 +119,170 @@ questions:
     module: 3
     topic: Graph Traversal BFS and DFS
 
-  # Not in any course: the best match should score BELOW RAG_MIN_SCORE,
-  # so the assistant says "I couldn't find this" instead of guessing.
+  # ---------- keyword: exact terms a student copies from code, slides or an error ----------
+  - id: K01
+    category: keyword
+    question: "fillna vs dropna?"
+    course: PY101
+    module: 4
+    topic: Pandas Basics
+  - id: K02
+    category: keyword
+    question: "What does __init__ do?"
+    course: PY101
+    module: 3
+    topic: Classes and Objects
+  - id: K03
+    category: keyword
+    question: "What is the WAL?"
+    course: DB201
+    module: 4
+    topic: ACID Properties
+  - id: K04
+    category: keyword
+    question: "SELECT ... FOR UPDATE meaning"
+    course: DB201
+    module: 4
+    topic: Concurrency Control
+  - id: K05
+    category: keyword
+    question: "EXPLAIN ANALYZE"
+    course: DB201
+    module: 3
+    topic: Indexes
+  - id: K06
+    category: keyword
+    question: "dying ReLU"
+    course: DL301
+    module: 1
+    topic: Activation Functions
+  - id: K07
+    category: keyword
+    question: "When do I get a RecursionError?"
+    course: DSA201
+    module: 1
+    topic: Recursion
+  - id: K08
+    category: keyword
+    question: "What is 3NF?"
+    course: DB201
+    module: 1
+    topic: Normalization
+  - id: K09
+    category: keyword
+    question: "Is Timsort stable?"
+    course: DSA201
+    module: 4
+    topic: Sorting Algorithms
+  - id: K10
+    category: keyword
+    question: "What does k-means++ do?"
+    course: ML201
+    module: 4
+    topic: K-Means Clustering
+  - id: K11
+    category: keyword
+    question: "RLHF"
+    course: NLP302
+    module: 4
+    topic: Pretrained Language Models
+  - id: K12
+    category: keyword
+    question: "NOT IN with NULL returns nothing, why?"
+    course: DB201
+    module: 3
+    topic: Subqueries
+
+  # ---------- paraphrase: the concept is described, not named ----------
+  - id: P01
+    category: paraphrase
+    question: "My function keeps calling itself and never stops. What did I forget?"
+    course: DSA201
+    module: 1
+    topic: Recursion
+  - id: P02
+    category: paraphrase
+    question: "Our course table repeats the teacher's phone number in every row. Why is that bad?"
+    course: DB201
+    module: 1
+    topic: Normalization
+  - id: P03
+    category: paraphrase
+    question: "If the power goes off right after my payment is confirmed, is it still saved?"
+    course: DB201
+    module: 4
+    topic: ACID Properties
+  - id: P04
+    category: paraphrase
+    question: "Why can't I just stack linear layers with nothing in between?"
+    course: DL301
+    module: 1
+    topic: Activation Functions
+  - id: P05
+    category: paraphrase
+    question: "Should Teacher extend User, or should it just hold a User object?"
+    course: PY101
+    module: 3
+    topic: Inheritance
+  - id: P06
+    category: paraphrase
+    question: "How can I squeeze 50 columns into 2 so I can plot my data?"
+    course: ML201
+    module: 4
+    topic: Principal Component Analysis
+
+  # ---------- follow_up: meaningless without the previous question ----------
+  - id: F01
+    category: follow_up
+    history: ["What is the chain rule?"]
+    question: "Can you show me a worked example?"
+    course: DL301
+    module: 1
+    topic: Chain Rule
+  - id: F02
+    category: follow_up
+    history: ["How does a LEFT JOIN work?"]
+    question: "What is the classic mistake people make with it?"
+    course: DB201
+    module: 3
+    topic: SQL Joins
+  - id: F03
+    category: follow_up
+    history: ["What is a database index?"]
+    question: "Does it make anything slower?"
+    course: DB201
+    module: 3
+    topic: Indexes
+  - id: F04
+    category: follow_up
+    history: ["Explain the perceptron."]
+    question: "What is its famous limitation?"
+    course: DL301
+    module: 1
+    topic: Perceptron
+  - id: F05
+    category: follow_up
+    history: ["What is dynamic programming?"]
+    question: "What are the two styles of doing it?"
+    course: DSA201
+    module: 4
+    topic: Dynamic Programming
+
+  # ---------- no_answer: not in any course ----------
+  # Nothing may count as relevant, so the assistant says "I couldn't find this" instead of guessing.
   - id: N01
     question: "Who won the cricket world cup in 2011?"
     expect: no_answer
   - id: N02
     question: "Give me a recipe for paneer butter masala."
+    expect: no_answer
+  - id: N03
+    question: "What is the capital of Australia?"
+    expect: no_answer
+  - id: N04
+    question: "How do I file my income tax return in India?"
+    expect: no_answer
+  # Near the subject but not in the notes: the hardest kind to reject.
+  - id: N05
+    question: "How do I deploy my model on Kubernetes?"
     expect: no_answer

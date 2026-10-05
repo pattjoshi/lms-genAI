@@ -21,6 +21,11 @@ UPGRADES = [
     "ALTER TABLE documents ADD COLUMN IF NOT EXISTS superseded_at TIMESTAMPTZ",
     # Phase 1 fixes: students can remove doubts from their history
     "ALTER TABLE doubts ADD COLUMN IF NOT EXISTS hidden_at TIMESTAMPTZ",
+    # Phase 2: follow-up questions and query rewriting
+    "ALTER TABLE doubts ADD COLUMN IF NOT EXISTS conversation_id VARCHAR(64)",
+    "CREATE INDEX IF NOT EXISTS ix_doubts_conversation_id ON doubts (conversation_id)",
+    "ALTER TABLE doubts ADD COLUMN IF NOT EXISTS search_query TEXT",
+    "ALTER TABLE doubts ADD COLUMN IF NOT EXISTS top_rerank_score DOUBLE PRECISION",
 ]
 
 

@@ -11,6 +11,7 @@ from app.config import get_settings
 from app.db import engine
 from app.llm.service import openai_breaker
 from app.llm.tracing import tracing_enabled
+from app.rag import reranker, vectorstore
 
 router = APIRouter(tags=["health"])
 TIMEOUT_S = 3
@@ -57,4 +58,19 @@ async def health():
         # Config only — we don't spend tokens on a health check.
         "openai": {"ok": s.openai_api_key is not None, "model": s.openai_chat_model, "breaker": openai_breaker.state},
         "langfuse": {"ok": tracing_enabled(), "base_url": s.langfuse_base_url},
+        # Phase 2: is the search index in the hybrid format, and did the reranker load?
+        "retrieval": {
+            "hybrid": s.rag_hybrid,
+            "rerank": s.rag_rerank,
+            "reranker": reranker.status() if s.rag_rerank else "off",
+            "reranker_model": s.reranker_model,
+            "index": await _index_state(),
+        },
     }
+
+
+async def _index_state() -> str:
+    try:
+        return await asyncio.wait_for(vectorstore.collection_state(), TIMEOUT_S)
+    except Exception:  # noqa: BLE001 - Qdrant down is already reported above
+        return "unknown"
