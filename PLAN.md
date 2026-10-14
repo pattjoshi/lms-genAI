@@ -16,6 +16,10 @@ to a human with full context when it isn't sure.
 | LLM | OpenAI: small model for everything (`gpt-4o-mini` by default, set in `.env`), `text-embedding-3-small` |
 | Backend | Python 3.12, FastAPI, `uv` |
 | GenAI libraries | LangChain (steps kept visible, no black-box chains), LangGraph from Phase 4 |
+| Reranker | Local cross-encoder (fastembed / ONNX, `ms-marco-MiniLM-L-6-v2`), CPU only (Phase 2) |
+| MCP (Phase 4) | Official MCP Python SDK (FastMCP API) for the **server**; `langchain-mcp-adapters` for the **client** (our LangGraph agent) |
+| MCP transport | Streamable HTTP mounted at `/mcp` in FastAPI (remote clients) + stdio (local clients such as Claude Desktop) |
+| MCP auth | Personal access token per user (stored hashed, revocable in the portal) mapped to the same permission matrix; OAuth 2.1 documented as the upgrade path |
 | Frontend | Next.js + Tailwind, kept minimal |
 | Relational DB | PostgreSQL (Docker) |
 | Vector DB | Qdrant (Docker) |
@@ -38,7 +42,7 @@ a pause so you can understand it before the next one.
 | 1 ✅ | **Upload pipeline + basic RAG** | Parsing (keeping page numbers), chunking strategies, overlap, embeddings, cosine similarity, vector DB payloads, top-k, grounded prompts, streaming (SSE). Generated course files; start the 20-question eval set | A student gets a correct streamed answer from an uploaded PDF |
 | 2 ✅ | **Better retrieval** | Metadata filtering, query rewriting, hybrid search (dense + sparse, RRF), reranking, citations, relevance grading + corrective retry. Measure recall@k / MRR before & after | Answers cite file + page; students only see enrolled courses; numbers show the gain |
 | 3 | **Concept graph + learning paths** | Structured extraction (JSON schema + validation), entity dedup, graph modelling, Cypher traversal, GraphRAG-lite, quiz generation, human approval | "I don't understand X" returns a sensible study order from approved concepts |
-| 4 | **Routing + agent** | Intent routing (rules vs embeddings vs LLM), tool calling, LangGraph state machine, short/long-term memory, confidence scoring | Each question goes to the right tool; decisions visible in traces |
+| 4 | **Routing + agent + MCP** | Intent routing (rules vs embeddings vs LLM), tool calling, LangGraph state machine, short/long-term memory, confidence scoring. **MCP:** tools / resources / prompts, stdio vs Streamable HTTP, token auth, tool annotations, MCP security (tool poisoning, prompt injection in tool results, confused deputy). Our LMS is an MCP **server**; our agent is an MCP **client** of it | Each question goes to the right tool; decisions visible in traces; MCP Inspector and Claude Desktop can call our tools, and a student's token is refused for staff-only tools |
 | 5 | **Tickets + feedback loop** | Human in the loop, context packaging, knowledge feedback, clustering questions with embeddings | A resolved ticket's answer is used by the AI next time |
 | 6 | **SQL agent (all roles, scoped)** | Schema-aware prompting, few-shot, self-correction loop, SELECT-only validation, read-only DB user, row-level security, chart choice | Plain English → SQL → answer + chart; can't write; can't escape scope |
 | 7 | **Evaluation, guardrails, tracing** | RAG metrics (context precision/recall, faithfulness, relevance), LLM-as-judge and its biases, injection & off-topic guardrails, cost/latency dashboards | One command runs the eval and shows better/worse |
@@ -52,6 +56,12 @@ chunk is relevant, and if none is, a corrective retry rephrases the query once (
 *answer* itself (faithfulness, with an LLM judge) needs an eval harness and belongs in Phase 7. The
 file-type filter was dropped: one course's material is rarely split by file type, while course and
 module filters match how students think.
+
+**Phase 4 note (MCP):** every LMS capability is written **once**, as a tool on our MCP server.
+External MCP clients (Claude Desktop, Cursor, VS Code, MCP Inspector) call it over Streamable HTTP or
+stdio, and our own LangGraph agent calls the same tools as an MCP client, so the agent and outside apps
+share one permission-checked implementation. Phase 3 comes first because `get_learning_path` needs the
+concept graph. Details in the MCP section below.
 
 **File types:** `.doc` (old binary Word) is rejected with a "save as .docx" message; scanned PDFs (no
 text layer) are rejected with an OCR hint. Both are deliberate scope limits.
@@ -70,7 +80,7 @@ text layer) are rejected with an OCR hint. Both are deliberate scope limits.
 | S2 ⭐ | Citations (file + page) under each answer | 2 |
 | S3 ⭐ | Answers only from enrolled courses | 2 |
 | S4 ⭐ | Follow-up questions work (query rewriting) | 2 |
-| S5 | Filter chat by course / module / file type | 2 |
+| S5 | Filter chat by course / module ("Search in") | 2 |
 | S6 ⭐ | 👍/👎 per answer; 👎 creates a ticket | 5 |
 | S7 | "Not sure" warning when confidence is low | 4 |
 | S8 | Off-topic questions politely refused | 7 |
@@ -135,6 +145,24 @@ text layer) are rejected with an OCR hint. Both are deliberate scope limits.
 | A9 | Guardrail log | 7 |
 | A10 | Full data scope | 0 |
 
+### MCP (all roles, Phase 4)
+
+| # | Feature | Phase |
+|---|---|---|
+| M1 ⭐ | MCP server at `/mcp` (Streamable HTTP) + stdio entry point | 4 |
+| M2 ⭐ | Personal access tokens: create / revoke in the portal, scoped to the user's role | 4 |
+| M3 ⭐ | Tool `search_course_material`: Phase 2 retrieval, enrolled courses only | 4 |
+| M4 ⭐ | Tool `ask_doubt`: full grounded answer with citations | 4 |
+| M5 ⭐ | Tool `get_learning_path`: study order from the approved concept graph | 4 |
+| M6 | Tools `my_weak_topics`, `practice_questions` | 4 |
+| M7 ⭐ | Tool `list_students`: teacher/admin only, refused for students | 4 |
+| M8 | Resources: `course://{code}/syllabus`, `doc://{id}/chunks` (permission-checked) | 4 |
+| M9 | Prompts: "explain like I'm a beginner", "quiz me on topic X" | 4 |
+| M10 ⭐ | LangGraph agent loads its tools from our MCP server (`langchain-mcp-adapters`) | 4 |
+| M11 ⭐ | Audit log, rate limit and daily budget on every MCP tool call | 4 |
+| M12 | One external MCP server used by the agent (e.g. filesystem "notes" folder) | 4 |
+| M13 | OAuth 2.1 instead of personal tokens | extra |
+
 ---
 
 ## Permission matrix
@@ -156,7 +184,40 @@ Code: `backend/app/permissions.py` (single source of truth).
 | 2. Tools per role | A role's agent never receives tools it may not use | No |
 | 3. Database | Queries filtered by scope (Phase 0: WHERE clauses; Phase 6: Postgres row-level security) | No |
 
+**MCP uses the same layers.** An MCP token identifies a user; layer 2 (tools per role: staff-only tools are
+not even listed for a student token) and layer 3 (scoped queries) apply exactly as in the web app. Tool
+results are treated as data, never instructions.
+
 Attack questions for testing these: `evals/attack_questions.yaml`.
+
+---
+
+## MCP design (Phase 4)
+
+```
+ External MCP clients                      Our app
+ (Claude Desktop, Cursor,                  ┌──────────────────────────────────────┐
+  VS Code, MCP Inspector)                  │ FastAPI                              │
+          │                                │  ├─ /chat  (student UI)              │
+          │  Streamable HTTP + token       │  │    └─ LangGraph agent ──┐         │
+          └───────────────────────────────▶│  ├─ /mcp  ◀── MCP client ──┘         │
+          stdio (local dev)                │  │    MCP SERVER: tools/resources/   │
+                                           │  │    prompts → permission matrix    │
+                                           │  └─ retrieval · Neo4j · Postgres     │
+                                           └──────────────────────────────────────┘
+```
+
+| Topic | Decision | Why |
+|---|---|---|
+| Server SDK | Official MCP Python SDK (FastMCP API) | Reference implementation; typed tools from Python type hints |
+| Transports | Streamable HTTP (`/mcp`) + stdio | Streamable HTTP is the current spec transport (replaced HTTP+SSE); stdio is what desktop clients launch |
+| Auth | Bearer personal access token → user → permission matrix | Simple, revocable, same model as GitHub's MCP server with a PAT; OAuth 2.1 is the spec's full solution (upgrade path) |
+| Tool design | Typed inputs, structured outputs, `readOnlyHint` annotations, clear descriptions | Clients (and LLMs) pick tools from their descriptions; annotations tell clients what is safe |
+| Write tools | None at first (read-only). Ticket creation added in Phase 5 with confirmation | Least privilege |
+| Cost / abuse | Same daily budget + per-token rate limit + audit log (`mcp_calls` table) | An MCP client can loop; the server must protect itself |
+| Client side | `langchain-mcp-adapters` turns MCP tools into LangChain tools for the LangGraph agent | Standard bridge; tools written once, used by agent and outside apps |
+| Testing | MCP Inspector (official debugger), Claude Desktop, unit tests per tool + permission tests | Inspector shows exactly what a client sees |
+| Interview topics | MCP vs function calling vs OpenAPI, "N apps × M tools", tools vs resources vs prompts, transports, auth, tool poisoning, prompt injection via tool results, confused deputy | |
 
 ---
 
@@ -198,6 +259,9 @@ backend/            FastAPI app (uv project)
     ingest/         parse -> chunk -> embed -> tag -> index (Phase 1); reindex (Phase 2)
     rag/            Qdrant access, BM25 vectors, RRF, reranker, query rewriting, retriever (Phase 1-2)
     evals/          retrieval eval (python -m app.evals.retrieval [--compare])
+    graph/          Neo4j concept graph + learning paths (Phase 3)
+    agent/          LangGraph router + agent, MCP client (Phase 4)
+    mcp/            MCP server: tools, resources, prompts, token auth (Phase 4)
     routers/        API endpoints
     seed/           dummy data (python -m app.seed --reset)
   scripts/          generate_course_files.py (renders data/course_source -> data/course_files)
