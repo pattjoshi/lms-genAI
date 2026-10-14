@@ -241,10 +241,13 @@ async def document_concepts(doc_id: int) -> list[dict]:
 async def course_graph(course_id: int) -> dict:
     nodes, _, _ = await driver().execute_query(
         """MATCH (c:Concept {course_id: $course_id})
-           OPTIONAL MATCH (c)-[:EXPLAINED_IN]->(d:Document)
+           OPTIONAL MATCH (c)-[e:EXPLAINED_IN]->(d:Document)
            RETURN c.uid AS uid, c.name AS name, c.definition AS definition, c.status AS status,
                   coalesce(c.aliases, []) AS aliases, c.possible_duplicate_of AS possible_duplicate_of,
-                  collect(d.file_name) AS files
+                  collect(d.file_name) AS files,
+                  [x IN collect(CASE WHEN d IS NULL THEN NULL ELSE
+                      {document_id: d.id, file_name: d.file_name, pages: e.pages, section: e.section,
+                       evidence: e.evidence} END) WHERE x IS NOT NULL] AS explanations
            ORDER BY c.name""",
         course_id=course_id,
     )

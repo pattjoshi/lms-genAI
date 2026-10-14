@@ -25,7 +25,7 @@ from app.llm.errors import LLMError
 from app.llm.tracing import init_tracing, shutdown_tracing
 from app.permissions import PermissionDenied
 from app.rag import reranker, vectorstore
-from app.routers import ai, auth, chat, concepts, data, documents, health, portal
+from app.routers import ai, auth, chat, concepts, data, documents, health, learning, portal
 from app.schema import ensure_schema
 
 logging.basicConfig(level=logging.INFO, format="%(asctime)s %(levelname)-7s %(name)s: %(message)s")
@@ -120,6 +120,7 @@ for r in (
     documents.router,
     chat.router,
     concepts.router,
+    learning.router,
 ):
     app.include_router(r)
 
