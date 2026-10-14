@@ -171,7 +171,7 @@ export function PortalShell({
                 <li key={f.id} className="flex items-center gap-2.5 text-sm text-fg">
                   <span className="w-9 shrink-0 font-mono text-xs text-faint">{f.id}</span>
                   <span className="flex-1">{f.name}</span>
-                  {f.phase <= CURRENT_PHASE ? (
+                  {f.live || f.phase <= CURRENT_PHASE ? (
                     <span className="rounded-full bg-ok-soft px-2 py-0.5 text-xs font-medium text-ok">Live</span>
                   ) : (
                     <span className="rounded-full bg-brand-soft px-2 py-0.5 text-xs font-medium text-brand-ink">

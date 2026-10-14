@@ -71,6 +71,12 @@ function StudentHome() {
               <li key={t.topic} className="flex items-center justify-between py-2.5 text-sm">
                 <span className="text-fg">
                   {t.topic} <span className="font-mono text-xs text-faint">{t.course}</span>
+                  <Link
+                    href={`/student/path?q=${encodeURIComponent(t.topic)}`}
+                    className="ml-2 text-xs text-brand-ink hover:underline"
+                  >
+                    study path
+                  </Link>
                 </span>
                 <ScoreText score={t.avg_score} />
               </li>

@@ -28,14 +28,14 @@ export const NAV: Record<Role, NavItem[]> = {
   student: [
     { label: "Dashboard", icon: LayoutDashboard, href: "/student" },
     { label: "Ask a doubt", icon: MessageCircleQuestion, href: "/student/ask" },
-    { label: "Learning path", icon: Route, phase: 3 },
+    { label: "Learning path", icon: Route, href: "/student/path" },
     { label: "Practice", icon: Dumbbell, phase: 4 },
     { label: "My tickets", icon: Ticket, phase: 5 },
   ],
   teacher: [
     { label: "Dashboard", icon: LayoutDashboard, href: "/teacher" },
     { label: "Course files", icon: Upload, href: "/teacher/files" },
-    { label: "Concept graph", icon: Network, phase: 3 },
+    { label: "Concept graph", icon: Network, href: "/teacher/concepts" },
     { label: "Quizzes", icon: ListChecks, phase: 3 },
     { label: "Doubt insights", icon: BookOpen, phase: 5 },
   ],
@@ -50,7 +50,8 @@ export const NAV: Record<Role, NavItem[]> = {
   ],
 };
 
-export type Feature = { id: string; name: string; phase: number };
+// live = built ahead of CURRENT_PHASE (a phase delivered in parts)
+export type Feature = { id: string; name: string; phase: number; live?: boolean };
 
 export const ROADMAP: Record<Role, Feature[]> = {
   student: [
@@ -58,7 +59,7 @@ export const ROADMAP: Record<Role, Feature[]> = {
     { id: "S2", name: "Citations (file + page) under every answer", phase: 2 },
     { id: "S3", name: "Answers only from your enrolled courses", phase: 2 },
     { id: "S4", name: "Follow-up questions work", phase: 2 },
-    { id: "S9", name: "\"I don't understand X\" → learning path", phase: 3 },
+    { id: "S9", name: "\"I don't understand X\" → learning path", phase: 3, live: true },
     { id: "S12", name: "Assistant remembers your weak topics", phase: 4 },
     { id: "S13", name: "Practice questions from weak topics", phase: 4 },
     { id: "S18", name: "Login/payment issues go to support", phase: 4 },
@@ -69,8 +70,8 @@ export const ROADMAP: Record<Role, Feature[]> = {
     { id: "T1", name: "Upload HTML, DOC, PDF, TXT", phase: 1 },
     { id: "T2", name: "Processing status per file", phase: 1 },
     { id: "T3", name: "Auto tags (topic, difficulty, type)", phase: 1 },
-    { id: "T6", name: "LLM extracts concepts and prerequisites", phase: 3 },
-    { id: "T7", name: "Approve / edit / merge concepts", phase: 3 },
+    { id: "T6", name: "LLM extracts concepts and prerequisites", phase: 3, live: true },
+    { id: "T7", name: "Approve / edit / merge concepts", phase: 3, live: true },
     { id: "T10", name: "Generate quizzes from documents", phase: 3 },
     { id: "M7", name: "Query your students from any MCP client", phase: 4 },
     { id: "T13", name: "Most asked doubts (grouped by meaning)", phase: 5 },

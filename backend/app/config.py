@@ -98,6 +98,8 @@ class Settings(BaseSettings):
     concept_merge_threshold: float = 0.90
     # >= this (but below the merge threshold): kept apart, flagged "possible duplicate" for the teacher
     concept_suggest_threshold: float = 0.80
+    # "I don't understand X": below this similarity a concept isn't offered as a match
+    learning_path_min_similarity: float = 0.35
 
     # --- Langfuse (tracing) ---
     langfuse_public_key: str | None = None

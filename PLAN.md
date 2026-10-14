@@ -60,8 +60,10 @@ module filters match how students think.
 **Phase 3 note:** built in three parts. **3a (done):** extraction into Neo4j as drafts, with its own status per
 file (a graph failure never takes a file out of search), an evidence quote per concept checked in code, and
 two-threshold entity resolution (auto-merge only near-certain matches, flag the grey zone for the teacher).
-**3b:** teacher review + learning paths (T7, T8, T9, S9, S10). **3c:** quizzes (T10, T11, S15). Prerequisites
-from another course become "mentioned only" nodes; linking courses together is left to 3b.
+**3b (done):** teacher review (T7, T8: approving = publishing; rejections and edits survive re-extraction) and
+learning paths (S9, S10: approved concepts only, topological order, each step linked to its file and page; a
+concept a course only mentions is linked to the course that explains it, by key). The visual graph view (T9)
+is left as an extra. **3c:** quizzes (T10, T11, S15).
 
 **Phase 4 note (MCP):** every LMS capability is written **once**, as a tool on our MCP server.
 External MCP clients (Claude Desktop, Cursor, VS Code, MCP Inspector) call it over Streamable HTTP or

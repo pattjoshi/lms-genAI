@@ -8,8 +8,8 @@ Phase 3 is built in three parts:
 
 | Part | What | Status |
 |---|---|---|
-| **3a** | An LLM extracts concepts + prerequisites from each file into Neo4j, as **drafts** | ✅ this document |
-| 3b | Teacher review (approve / edit / merge / reject), publish, "I don't understand X" → learning path | next |
+| **3a** | An LLM extracts concepts + prerequisites from each file into Neo4j, as **drafts** | ✅ sections 1-2.8 |
+| **3b** | Teacher review (approve / edit / merge / reject), publish, "I don't understand X" → learning path | ✅ sections 2.9-2.12 |
 | 3c | Quiz generation from a file or topic, with teacher approval | after 3b |
 
 ---
@@ -160,6 +160,69 @@ The course sources in `data/course_source/` have the answer key: every `## Topic
 Recall is easy to buy: extract more concepts and more edges. Precision is what keeps it honest. Always
 read both.
 
+### 2.9 Human in the loop: the model proposes, a teacher decides (3b)
+
+Teacher page **Concept graph** (`frontend/app/teacher/concepts/page.tsx`, API `routers/concepts.py`, logic
+`graph/review.py`). Each card shows the concept, the file + page + quote it came from, and its prerequisites.
+
+| Action | What happens in the graph | Why it is built that way |
+|---|---|---|
+| Approve | `status = approved` | **Publishing = approving** (T8): students only ever see approved concepts |
+| Reject | `status = rejected` | Kept, not deleted: a re-extraction matches it by key and skips it |
+| Edit | new name/definition; the **old name becomes an alias**; uid unchanged | The next extraction that says the old name still lands on this node |
+| Merge | links and names of A move to B, A is deleted | Duplicates the embeddings missed (or flagged) are one click |
+| Remove a prerequisite | edge `status = rejected` (a tombstone) | A re-run that proposes it again doesn't bring it back |
+| Add a prerequisite | edge `status = approved`, no source file | Survives re-processing and file deletion; refused if it makes a loop |
+| Approve all drafts | every draft → approved | For a teacher who read the list and rejected only the bad ones |
+
+Review is **per concept**, not per edge: approving 15 concepts is reasonable, approving 40 edges one by
+one is not, so a draft edge counts as long as both ends are approved and nobody rejected it. The design
+question behind this is always the same: where does a human add the most value for the least clicks?
+
+Every action checks on the server that the concept belongs to a course the user manages. The uid comes
+from the browser, so it is never trusted on its own (layer 3 of the permission model, again).
+
+### 2.10 From "I don't understand X" to a concept
+
+Student page **Learning path** (`frontend/app/student/path/page.tsx`, API `routers/learning.py`, logic
+`graph/paths.py`). Students type words, the graph has nodes. Matching, cheapest first:
+
+1. **Rules:** same key as a name or alias (`backprop` → Backpropagation via its alias) = 1.0; one name
+   inside the other = 0.9; else the share of words in common (≥ 0.5).
+2. **Embeddings,** only if the rules found nothing: one embedding call for the query, cosine against the
+   stored concept embeddings, `LEARNING_PATH_MIN_SIMILARITY` (0.35) as the floor.
+
+Only **approved** concepts of the student's **enrolled** courses are candidates: the same
+"filter comes from identity" rule as RAG retrieval. A clear match opens the path directly; otherwise the
+student picks from the matches.
+
+### 2.11 The study order: a topological sort
+
+```cypher
+MATCH (t:Concept {uid: $uid})-[r:REQUIRES*0..25]->(p:Concept)
+WHERE all(x IN r WHERE x.status <> 'rejected' AND endNode(x).status = 'approved')
+```
+
+That returns everything X needs, directly or through others. The order comes from **Kahn's algorithm**
+(`study_order()`): repeatedly take a concept whose prerequisites are all placed. When several are ready at
+once, the one that appears first in the course (module, then position in the file) goes first, so the
+path reads like the course does. Concepts this course never explains go first: they are background.
+
+Why a topological sort and not "sort by depth": depth puts *Derivatives* and *Gradient Descent* together
+because both are 2 hops away, but says nothing about the order between independent branches. A
+topological order is the definition of "every prerequisite before the thing that needs it".
+
+### 2.12 Each step links to its material
+
+Every step carries the `EXPLAINED_IN` links from extraction: file, module, page or section (S10), and an
+**Ask about it** button that opens the chat with the question filled in. A concept this course only
+mentions (Linear Regression in Deep Learning) is looked up **by key in the student's other courses**: "Not
+explained in this course. Covered in ML201 (page 2)". A key is a cheap cross-course join; no global
+concept ontology needed.
+
+Teachers can **preview** the path a student would get (drafts included) from each card, before
+approving anything.
+
 ---
 
 ## 3. Experiments: do these
@@ -190,6 +253,22 @@ Upgrading from Phase 2: start the backend once (new columns are added), then
 10. **Trace.** In Langfuse open an `extract_concepts` trace: one `extract_section` per section, with the
     kept and dropped concepts, then `embed_concepts`. What does one file cost?
 
+**3b: review and learning paths**
+
+11. **Nothing is public yet.** As **Riya**, open **Learning path** and search *backpropagation*. Nothing:
+    no concept is approved. Why is that the right default?
+12. **Review.** As the DL301 teacher, open **Concept graph**, click the route icon on *Backpropagation* to
+    preview the path, fix anything wrong (reject a bad prerequisite, merge a duplicate, rename one), then
+    **Approve all drafts**. Search again as Riya.
+13. **Cross-course.** Riya's path for backpropagation starts with *Derivatives*. Is it explained in DL301?
+    Approve ML201's concepts (as admin or its teacher) and look at that step again.
+14. **Rules vs meaning.** Search *backprop*, then *why does my network's loss not go down*. Which one needed
+    an embedding call? (Look at the "Closest by meaning" label, and at `llm_usage`.)
+15. **Decisions survive re-runs.** Reject a concept, rename another, remove a prerequisite, then
+    `uv run python -m app.graph.backfill --force --course DL301`. Did any decision get undone?
+16. **Loops.** Try to add *Backpropagation* as a prerequisite of *Chain Rule*. Read the error. Where in the
+    code is it refused, and why can't the learning path tolerate it?
+
 ---
 
 ## 4. Check yourself
@@ -203,11 +282,17 @@ Upgrading from Phase 2: start the backend once (new columns are added), then
    make sure of it?
 7. Why can't a prerequisite graph have cycles, and where is that enforced?
 8. Your edge recall went up and edge precision went down. Is the change better?
+9. Why is a rejected concept kept in the graph instead of deleted?
+10. Why does renaming keep the old name as an alias?
+11. Why are edges not reviewed one by one, and when does a teacher still touch an edge?
+12. Why a topological sort instead of sorting by distance from the target?
+13. A student searches a concept that exists only as a draft. What do they see, and why?
 
 ---
 
-## 5. Next: Phase 3b, review and learning paths
+## 5. Next: Phase 3c, quizzes
 
-Teachers review the drafts (approve / edit / merge / reject, with the evidence next to each one), approved
-concepts are published, and *"I don't understand X"* walks the approved `REQUIRES` edges backwards into a
-study order, each step linked to the page that explains it.
+Generate quiz questions from a file or topic (structured output again), each with the chunk it came from,
+and a teacher approves them before students can take them. Phase 4 then lets the chat router send
+*"I don't understand X"* straight to the learning path, and uses quiz scores to mark prerequisites a
+student already knows (S11).

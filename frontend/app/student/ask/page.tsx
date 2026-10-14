@@ -476,6 +476,12 @@ function AskDoubt() {
   const history = useApi<HistoryItem[]>(`/chat/history?limit=8&v=${finished}-${historyVersion}`);
   const scope = useApi<ScopeCourse[]>("/chat/scope");
 
+  // Links from other pages (e.g. a learning path step) can prefill the question: /student/ask?q=...
+  useEffect(() => {
+    const q = new URLSearchParams(window.location.search).get("q");
+    if (q) setQuestion(q);
+  }, []);
+
   // A per-browser preference only; storage can be unavailable (private mode), so guard it.
   useEffect(() => {
     try {
