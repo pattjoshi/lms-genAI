@@ -41,7 +41,7 @@ a pause so you can understand it before the next one.
 | 0 ✅ | **Skeleton** | Tokens & cost, LLM error handling (retry, backoff, circuit breaker, budget), tracing, "LLM is not a security boundary" | Each role logs in to its portal; first LLM call shows tokens/cost/latency in the UI and in Langfuse |
 | 1 ✅ | **Upload pipeline + basic RAG** | Parsing (keeping page numbers), chunking strategies, overlap, embeddings, cosine similarity, vector DB payloads, top-k, grounded prompts, streaming (SSE). Generated course files; start the 20-question eval set | A student gets a correct streamed answer from an uploaded PDF |
 | 2 ✅ | **Better retrieval** | Metadata filtering, query rewriting, hybrid search (dense + sparse, RRF), reranking, citations, relevance grading + corrective retry. Measure recall@k / MRR before & after | Answers cite file + page; students only see enrolled courses; numbers show the gain |
-| 3 🚧 | **Concept graph + learning paths** | Structured extraction (JSON schema + validation), entity dedup, graph modelling, Cypher traversal, GraphRAG-lite, quiz generation, human approval | "I don't understand X" returns a sensible study order from approved concepts |
+| 3 ✅ | **Concept graph + learning paths** | Structured extraction (JSON schema + validation), entity dedup, graph modelling, Cypher traversal, GraphRAG-lite, quiz generation, human approval | "I don't understand X" returns a sensible study order from approved concepts |
 | 4 | **Routing + agent + MCP** | Intent routing (rules vs embeddings vs LLM), tool calling, LangGraph state machine, short/long-term memory, confidence scoring. **MCP:** tools / resources / prompts, stdio vs Streamable HTTP, token auth, tool annotations, MCP security (tool poisoning, prompt injection in tool results, confused deputy). Our LMS is an MCP **server**; our agent is an MCP **client** of it | Each question goes to the right tool; decisions visible in traces; MCP Inspector and Claude Desktop can call our tools, and a student's token is refused for staff-only tools |
 | 5 | **Tickets + feedback loop** | Human in the loop, context packaging, knowledge feedback, clustering questions with embeddings | A resolved ticket's answer is used by the AI next time |
 | 6 | **SQL agent (all roles, scoped)** | Schema-aware prompting, few-shot, self-correction loop, SELECT-only validation, read-only DB user, row-level security, chart choice | Plain English → SQL → answer + chart; can't write; can't escape scope |
@@ -63,7 +63,9 @@ two-threshold entity resolution (auto-merge only near-certain matches, flag the 
 **3b (done):** teacher review (T7, T8: approving = publishing; rejections and edits survive re-extraction) and
 learning paths (S9, S10: approved concepts only, topological order, each step linked to its file and page; a
 concept a course only mentions is linked to the course that explains it, by key). The visual graph view (T9)
-is left as an extra. **3c:** quizzes (T10, T11, S15).
+is left as an extra. **3c (done):** quizzes (T10, T11, S15): one structured-output call per quiz from passages
+spread over a file or topic, each question checked against a quote from its passage, options shuffled in
+code (answer-position bias), every question approved by the teacher before publishing, graded on the server.
 
 **Phase 4 note (MCP):** every LMS capability is written **once**, as a tool on our MCP server.
 External MCP clients (Claude Desktop, Cursor, VS Code, MCP Inspector) call it over Streamable HTTP or

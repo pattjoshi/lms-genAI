@@ -100,6 +100,11 @@ class Settings(BaseSettings):
     concept_suggest_threshold: float = 0.80
     # "I don't understand X": below this similarity a concept isn't offered as a match
     learning_path_min_similarity: float = 0.35
+    # Quizzes (3c): passages sent to the LLM per quiz, and how long each may be
+    quiz_max_passages: int = 8
+    quiz_passage_chars: int = 1500
+    quiz_max_questions: int = 10
+    quiz_max_output_tokens: int = 3000
 
     # --- Langfuse (tracing) ---
     langfuse_public_key: str | None = None

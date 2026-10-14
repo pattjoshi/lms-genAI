@@ -165,6 +165,7 @@ def build_seed(now: datetime, seed: int = 42, n_students: int = 150) -> SeedData
                 quiz = Quiz(
                     id=next(ids["quiz"]),
                     topic_id=topic.id,
+                    course_id=course.id,
                     title=f"{t_title} Quiz",
                     created_at=created + timedelta(days=10),
                 )

@@ -44,4 +44,9 @@ def test_failed_old_version_can_be_replaced():
 
 def test_schema_upgrades_are_idempotent():
     # They run on every start, so each must be safe to run again.
-    assert all("IF NOT EXISTS" in sql for sql in UPGRADES)
+    # Other idempotent forms: DROP NOT NULL (a no-op when already nullable) and a backfill
+    # UPDATE that only touches rows still NULL.
+    def safe(sql: str) -> bool:
+        return "IF NOT EXISTS" in sql or "DROP NOT NULL" in sql or (sql.startswith("UPDATE") and "IS NULL" in sql)
+
+    assert all(safe(sql) for sql in UPGRADES)

@@ -9,12 +9,14 @@ guardrails and tracing.
 - The planted "stories" in the dummy data: [data/seed_stories.md](data/seed_stories.md)
 - Interview prep per phase (approach, alternatives, cross-questions): [docs/interview/](docs/interview/)
 
-**Current phase: 3 (concept graph), parts 3a + 3b done.** After a file is indexed, an LLM extracts its key
+**Current phase: 3 (concept graph and quizzes), done.** After a file is indexed, an LLM extracts its key
 concepts and prerequisites with structured output, every concept is checked against a quote from the file,
 duplicates are merged across files, and the result goes into Neo4j as **drafts**. Teachers review them on the
 **Concept graph** page (approve, edit, merge, reject, fix prerequisites); students type *"I don't understand
 X"* on **Learning path** and get a study order of approved concepts, each linked to its file and page.
-Measured with `uv run python -m app.evals.concepts`. Quizzes (3c) come next.
+Teachers also generate **quizzes** from a file or topic: every question is checked against a quote from
+its source passage, and the teacher approves each one before publishing. Measured with
+`uv run python -m app.evals.concepts`. Phase 4 (routing, agent, MCP) comes next.
 
 **Phase 2 (better retrieval):** hybrid search (meaning + BM25 keywords, fused with RRF), a local
 cross-encoder reranker, follow-up questions (query rewriting), a corrective retry, "Search in" filters, and
@@ -105,7 +107,7 @@ Admin UIs: Qdrant <http://localhost:6333/dashboard>, Neo4j <http://localhost:747
 ```powershell
 cd backend
 uv sync                                  # creates .venv and installs everything
-uv run pytest                            # 88 tests; 5 use Neo4j and are skipped when it isn't running
+uv run pytest                            # 97 tests; 5 use Neo4j and are skipped when it isn't running
 uv run python -m app.seed --reset        # create tables + load dummy data
 uv run python -m app.ingest.load_samples # index the 24 sample files + extract their concepts (~$0.05)
 uv run uvicorn app.main:app --reload --port 8000
@@ -167,6 +169,10 @@ Open <http://localhost:3000>.
     what's wrong, then **Approve all drafts**. Do the same for ML201 as **Neha Kapoor** (admin).
 24. As **Riya** again: the path for *backprop* lists the prerequisites first, each with its file and page.
     Steps DL301 only mentions point to ML201. On her dashboard, each weak topic has a **study path** link.
+25. As **Suresh Rao**, open **Quizzes**, generate 5 questions from a DL301 file, check each one against its
+    source passage, approve or reject them all and **Publish**.
+26. As **Riya**, open **Quizzes**, take it, and submit with one wrong answer: each result shows the
+    explanation and the file and page to read.
 
 Then work through the experiments in [docs/phase-0.md](docs/phase-0.md), [docs/phase-1.md](docs/phase-1.md),
 [docs/phase-2.md](docs/phase-2.md) and [docs/phase-3.md](docs/phase-3.md).

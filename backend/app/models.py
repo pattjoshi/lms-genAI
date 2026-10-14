@@ -140,12 +140,62 @@ class Enrollment(Base):
 
 class Quiz(Base):
     __tablename__ = "quizzes"
-    __table_args__ = {"comment": "One quiz per topic."}
+    __table_args__ = {
+        "comment": "A quiz. Seeded quizzes: one per topic, scores only. Phase 3: generated from a file or "
+        "topic by the AI, with questions in quiz_questions, published by the teacher."
+    }
 
     id: Mapped[int] = mapped_column(primary_key=True)
-    topic_id: Mapped[int] = mapped_column(ForeignKey("topics.id"))
+    topic_id: Mapped[int | None] = mapped_column(
+        ForeignKey("topics.id"), comment="Topic the quiz tests; null when a generated quiz spans several"
+    )
     title: Mapped[str] = mapped_column(String(160))
     created_at: Mapped[datetime] = mapped_column(DateTime(timezone=True))
+    # Phase 3: generated quizzes
+    course_id: Mapped[int | None] = mapped_column(ForeignKey("courses.id"), comment="Course the quiz belongs to")
+    status: Mapped[str] = mapped_column(
+        String(20),
+        default="published",
+        server_default="published",
+        comment="draft (teacher reviewing, students can't see it) | published",
+    )
+    created_by: Mapped[int | None] = mapped_column(
+        ForeignKey("users.id"), comment="Teacher who generated it; null for seeded quizzes"
+    )
+    document_id: Mapped[int | None] = mapped_column(
+        ForeignKey("documents.id", ondelete="SET NULL"), comment="File the questions were generated from"
+    )
+    source_label: Mapped[str | None] = mapped_column(
+        String(255), comment="What it was generated from, e.g. 'file: intro.pdf' or 'topic: Joins'"
+    )
+    generation_cost_usd: Mapped[float] = mapped_column(Float, default=0.0, server_default="0")
+    published_at: Mapped[datetime | None] = mapped_column(DateTime(timezone=True))
+
+
+class QuizQuestion(Base):
+    __tablename__ = "quiz_questions"
+    __table_args__ = {
+        "comment": "A multiple-choice question of a generated quiz, with the course passage it was written from."
+    }
+
+    id: Mapped[int] = mapped_column(primary_key=True)
+    quiz_id: Mapped[int] = mapped_column(ForeignKey("quizzes.id", ondelete="CASCADE"), index=True)
+    position: Mapped[int] = mapped_column(Integer, comment="1-based order inside the quiz")
+    question: Mapped[str] = mapped_column(Text)
+    options: Mapped[list] = mapped_column(JSON, comment="The 4 answer choices, in the order students see them")
+    correct_index: Mapped[int] = mapped_column(Integer, comment="0-based index into options")
+    explanation: Mapped[str] = mapped_column(Text, comment="Why the answer is right, shown after submitting")
+    difficulty: Mapped[str] = mapped_column(String(20), comment="easy | medium | hard")
+    status: Mapped[str] = mapped_column(
+        String(20), default="draft", comment="draft | approved | rejected. Students only get approved questions"
+    )
+    edited: Mapped[bool] = mapped_column(Boolean, default=False, comment="A teacher changed the AI's text")
+    chunk_id: Mapped[int | None] = mapped_column(ForeignKey("chunks.id", ondelete="SET NULL"))
+    source: Mapped[dict] = mapped_column(
+        JSON,
+        comment="Copy of the source passage: document_id, file_name, page, section, text, quote. Kept even "
+        "when the file is re-processed or deleted",
+    )
 
 
 class QuizAttempt(Base):
@@ -158,6 +208,9 @@ class QuizAttempt(Base):
     attempted_at: Mapped[datetime] = mapped_column(DateTime(timezone=True))
     score_pct: Mapped[int] = mapped_column(Integer, comment="0-100. Below 50 counts as failed.")
     time_taken_sec: Mapped[int] = mapped_column(Integer)
+    answers: Mapped[list | None] = mapped_column(
+        JSON, comment="Generated quizzes: [{question_id, chosen, correct}]; null for seeded attempts"
+    )
 
 
 class Payment(Base):

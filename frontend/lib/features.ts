@@ -19,7 +19,7 @@ import {
 import type { Role } from "./session";
 
 // Phase whose features are built. Roadmap items up to this phase show as "Live".
-export const CURRENT_PHASE = 2;
+export const CURRENT_PHASE = 3;
 
 // href = page exists; phase = arrives in that phase (greyed out until then)
 export type NavItem = { label: string; icon: LucideIcon; href?: string; phase?: number };
@@ -29,6 +29,7 @@ export const NAV: Record<Role, NavItem[]> = {
     { label: "Dashboard", icon: LayoutDashboard, href: "/student" },
     { label: "Ask a doubt", icon: MessageCircleQuestion, href: "/student/ask" },
     { label: "Learning path", icon: Route, href: "/student/path" },
+    { label: "Quizzes", icon: ListChecks, href: "/student/quizzes" },
     { label: "Practice", icon: Dumbbell, phase: 4 },
     { label: "My tickets", icon: Ticket, phase: 5 },
   ],
@@ -36,7 +37,7 @@ export const NAV: Record<Role, NavItem[]> = {
     { label: "Dashboard", icon: LayoutDashboard, href: "/teacher" },
     { label: "Course files", icon: Upload, href: "/teacher/files" },
     { label: "Concept graph", icon: Network, href: "/teacher/concepts" },
-    { label: "Quizzes", icon: ListChecks, phase: 3 },
+    { label: "Quizzes", icon: ListChecks, href: "/teacher/quizzes" },
     { label: "Doubt insights", icon: BookOpen, phase: 5 },
   ],
   support: [
@@ -60,6 +61,7 @@ export const ROADMAP: Record<Role, Feature[]> = {
     { id: "S3", name: "Answers only from your enrolled courses", phase: 2 },
     { id: "S4", name: "Follow-up questions work", phase: 2 },
     { id: "S9", name: "\"I don't understand X\" → learning path", phase: 3, live: true },
+    { id: "S15", name: "Take teacher-approved quizzes", phase: 3, live: true },
     { id: "S12", name: "Assistant remembers your weak topics", phase: 4 },
     { id: "S13", name: "Practice questions from weak topics", phase: 4 },
     { id: "S18", name: "Login/payment issues go to support", phase: 4 },
@@ -72,7 +74,8 @@ export const ROADMAP: Record<Role, Feature[]> = {
     { id: "T3", name: "Auto tags (topic, difficulty, type)", phase: 1 },
     { id: "T6", name: "LLM extracts concepts and prerequisites", phase: 3, live: true },
     { id: "T7", name: "Approve / edit / merge concepts", phase: 3, live: true },
-    { id: "T10", name: "Generate quizzes from documents", phase: 3 },
+    { id: "T10", name: "Generate quizzes from documents", phase: 3, live: true },
+    { id: "T11", name: "Approve / edit quiz questions (with source passage)", phase: 3, live: true },
     { id: "M7", name: "Query your students from any MCP client", phase: 4 },
     { id: "T13", name: "Most asked doubts (grouped by meaning)", phase: 5 },
     { id: "T14", name: "Content gaps: questions the AI couldn't answer", phase: 5 },
