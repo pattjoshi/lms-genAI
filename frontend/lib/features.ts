@@ -62,6 +62,7 @@ export const ROADMAP: Record<Role, Feature[]> = {
     { id: "S12", name: "Assistant remembers your weak topics", phase: 4 },
     { id: "S13", name: "Practice questions from weak topics", phase: 4 },
     { id: "S18", name: "Login/payment issues go to support", phase: 4 },
+    { id: "M3", name: "Use your course notes from Claude Desktop / Cursor (MCP)", phase: 4 },
     { id: "S6", name: "👍 / 👎 feedback, 👎 creates a ticket", phase: 5 },
   ],
   teacher: [
@@ -71,6 +72,7 @@ export const ROADMAP: Record<Role, Feature[]> = {
     { id: "T6", name: "LLM extracts concepts and prerequisites", phase: 3 },
     { id: "T7", name: "Approve / edit / merge concepts", phase: 3 },
     { id: "T10", name: "Generate quizzes from documents", phase: 3 },
+    { id: "M7", name: "Query your students from any MCP client", phase: 4 },
     { id: "T13", name: "Most asked doubts (grouped by meaning)", phase: 5 },
     { id: "T14", name: "Content gaps: questions the AI couldn't answer", phase: 5 },
   ],
@@ -85,6 +87,7 @@ export const ROADMAP: Record<Role, Feature[]> = {
     { id: "A1", name: "Ask in plain English → SQL, answer, chart", phase: 6 },
     { id: "A2", name: "SQL agent fixes its own errors", phase: 6 },
     { id: "A3", name: "Read-only DB user, SELECT only", phase: 6 },
+    { id: "M11", name: "MCP access tokens, audit log and rate limits", phase: 4 },
     { id: "A4", name: "Token cost dashboard", phase: 7 },
     { id: "A5", name: "Latency dashboard", phase: 7 },
     { id: "A6", name: "Answer quality dashboard", phase: 7 },
