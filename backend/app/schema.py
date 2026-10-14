@@ -31,6 +31,18 @@ UPGRADES = [
     "ALTER TABLE documents ADD COLUMN IF NOT EXISTS concepts_error TEXT",
     "ALTER TABLE documents ADD COLUMN IF NOT EXISTS num_concepts INTEGER NOT NULL DEFAULT 0",
     "ALTER TABLE documents ADD COLUMN IF NOT EXISTS concepts_cost_usd DOUBLE PRECISION NOT NULL DEFAULT 0",
+    # Phase 3c: generated quizzes (questions live in the new quiz_questions table)
+    "ALTER TABLE quizzes ALTER COLUMN topic_id DROP NOT NULL",
+    "ALTER TABLE quizzes ADD COLUMN IF NOT EXISTS course_id INTEGER REFERENCES courses(id)",
+    "ALTER TABLE quizzes ADD COLUMN IF NOT EXISTS status VARCHAR(20) NOT NULL DEFAULT 'published'",
+    "ALTER TABLE quizzes ADD COLUMN IF NOT EXISTS created_by INTEGER REFERENCES users(id)",
+    "ALTER TABLE quizzes ADD COLUMN IF NOT EXISTS document_id INTEGER REFERENCES documents(id) ON DELETE SET NULL",
+    "ALTER TABLE quizzes ADD COLUMN IF NOT EXISTS source_label VARCHAR(255)",
+    "ALTER TABLE quizzes ADD COLUMN IF NOT EXISTS generation_cost_usd DOUBLE PRECISION NOT NULL DEFAULT 0",
+    "ALTER TABLE quizzes ADD COLUMN IF NOT EXISTS published_at TIMESTAMPTZ",
+    """UPDATE quizzes q SET course_id = m.course_id FROM topics t JOIN modules m ON m.id = t.module_id
+       WHERE q.course_id IS NULL AND q.topic_id = t.id""",
+    "ALTER TABLE quiz_attempts ADD COLUMN IF NOT EXISTS answers JSON",
 ]
 
 

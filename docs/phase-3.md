@@ -10,7 +10,7 @@ Phase 3 is built in three parts:
 |---|---|---|
 | **3a** | An LLM extracts concepts + prerequisites from each file into Neo4j, as **drafts** | ✅ sections 1-2.8 |
 | **3b** | Teacher review (approve / edit / merge / reject), publish, "I don't understand X" → learning path | ✅ sections 2.9-2.12 |
-| 3c | Quiz generation from a file or topic, with teacher approval | after 3b |
+| **3c** | Quiz generation from a file or topic, teacher approval with the source passage, students take quizzes | ✅ sections 2.13-2.16 |
 
 ---
 
@@ -223,6 +223,62 @@ concept ontology needed.
 Teachers can **preview** the path a student would get (drafts included) from each card, before
 approving anything.
 
+### 2.13 Quiz generation: the same pattern, a different output (3c)
+
+```
+teacher picks a file or a topic
+   ▼
+1. chunks of that file (or tagged with / headed by that topic), current versions only
+2. pick up to 8 passages SPREAD over the material (not the first 8), cut to 1,500 chars each
+3. one LLM call, structured output:
+      { questions: [ {question, options[4], correct_option, explanation, passage, quote, difficulty} ] }
+4. check each question in code (2.14), shuffle its options, keep at most N
+5. save a DRAFT quiz; every question stores a copy of its passage
+```
+
+`app/quiz/generate.py`, prompt in `app/prompts/quiz.py`. One call per quiz, not one per question: the
+model sees all passages at once and can avoid asking the same thing twice. The passages are numbered and
+each question says which one it used.
+
+### 2.14 Checking generated questions
+
+Strict JSON guarantees fields, not good questions. Dropped in code (the teacher sees the reasons):
+
+| Check | Catches |
+|---|---|
+| exactly 4 non-empty, different options | "Yes" / "yes." as two options, a missing option |
+| no "all / none of the above" | lazy distractors that give the answer away |
+| `passage` exists and `quote` is in it (≥ 0.8, same check as concept evidence) | questions answered from general knowledge, or from the wrong passage |
+| same question twice | the model repeating itself |
+| "A) ..." letters stripped | letters doubled in the UI |
+
+**Answer-position bias.** Ask a model for 10 questions and the right answer is A or B far more often than
+1 in 4; a student who always picks B beats chance. We don't ask the model to balance it (it can't count
+reliably); `shuffle_options()` shuffles each question's options, seeded by the question text so the order
+is stable.
+
+What code can't check: whether a wrong option is *accidentally also right*, or whether the question is
+worth asking. That is the teacher's job, and why every question shows its source.
+
+### 2.15 Teacher approval with the source passage
+
+A question is `draft → approved | rejected`; a quiz is `draft → published`. Publishing is refused while
+any question is still a draft: every question is looked at by a human before any student sees it. Edits
+(question, options, correct answer, explanation) set `edited`, which tells you how often the AI's draft
+needed fixing: a quality metric for free.
+
+The passage is **copied** onto the question (`quiz_questions.source`), not just linked by chunk id:
+re-processing a file creates new chunks and deleting it removes them, but an approved question must still
+show where its answer came from.
+
+### 2.16 Taking a quiz
+
+Students get published quizzes of their enrolled courses, **approved questions only, without the answers**.
+Grading happens on the server (`POST /quizzes/{id}/attempts`); the answers, explanations and sources come
+back only after submitting. The attempt is a normal `quiz_attempts` row, so if the quiz is about one topic
+(the topic it was generated from, or the topic most of its passages were tagged with) the score shows up
+in the dashboard's weak topics, and the **study path** link from 3b is one click away.
+
 ---
 
 ## 3. Experiments: do these
@@ -269,6 +325,23 @@ Upgrading from Phase 2: start the backend once (new columns are added), then
 16. **Loops.** Try to add *Backpropagation* as a prerequisite of *Chain Rule*. Read the error. Where in the
     code is it refused, and why can't the learning path tolerate it?
 
+**3c: quizzes**
+
+17. **Generate.** As Suresh, open **Quizzes**, pick a DL301 file and generate 5 questions. Open the quiz:
+    for each question, open the source and check the answer against the highlighted quote. How many would
+    you approve unchanged?
+18. **Dropped questions.** Generate a few quizzes and read the yellow "failed the checks" box. Which check
+    fires most? Set `min_quote=0.0` in `check_questions()` and generate again: are the new questions
+    grounded in the passage?
+19. **Position bias.** Comment out the `shuffle_options()` line, generate 3 quizzes of 10, and count where
+    the right answer is. Put it back.
+20. **Spread.** Change `pick_passages()` to `return pool[:max_passages]` and generate from the longest
+    file. Which pages do the questions come from now?
+21. **Approval gate.** Try to publish with a draft question left. Approve or reject them all, publish, and
+    take the quiz as Riya. Get one wrong on purpose: where does the result send you?
+22. **Scores feed back.** Generate a quiz *from a topic*, publish it, take it badly as Riya, and open her
+    dashboard. Which weak topic changed?
+
 ---
 
 ## 4. Check yourself
@@ -287,12 +360,16 @@ Upgrading from Phase 2: start the backend once (new columns are added), then
 11. Why are edges not reviewed one by one, and when does a teacher still touch an edge?
 12. Why a topological sort instead of sorting by distance from the target?
 13. A student searches a concept that exists only as a draft. What do they see, and why?
+14. Why does every question name a passage and quote it, and what does the quote check NOT catch?
+15. Why shuffle options in code instead of asking the model to spread the right answer?
+16. Why is the source passage copied onto the question instead of only storing the chunk id?
+17. Why are answers graded on the server, and when do the right answers reach the browser?
+18. Why one LLM call per quiz instead of one per question? What would you gain with one per question?
 
 ---
 
-## 5. Next: Phase 3c, quizzes
+## 5. Next: Phase 4
 
-Generate quiz questions from a file or topic (structured output again), each with the chunk it came from,
-and a teacher approves them before students can take them. Phase 4 then lets the chat router send
-*"I don't understand X"* straight to the learning path, and uses quiz scores to mark prerequisites a
-student already knows (S11).
+Phase 3 is done. Phase 4 adds intent routing and an agent: the chat router sends *"I don't understand X"*
+straight to the learning path and *"quiz me on X"* to practice questions, and quiz scores mark
+prerequisites a student already knows (S11), so their learning paths get shorter.
