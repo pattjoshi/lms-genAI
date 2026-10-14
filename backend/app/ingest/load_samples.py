@@ -17,6 +17,7 @@ from sqlalchemy import select
 
 from app.config import REPO_ROOT
 from app.db import SessionLocal, engine
+from app.graph import store as graph_store
 from app.ingest.pipeline import process_document
 from app.ingest.storage import UploadAction, UploadRefused, store_upload
 from app.llm.tracing import init_tracing, shutdown_tracing
@@ -86,7 +87,9 @@ async def main() -> int:
                 total_chunks += doc.num_chunks
                 total_tokens += doc.embed_tokens
                 total_cost += doc.embed_cost_usd
-                print(f"  ok    {path.name:45} {doc.num_chunks:3} chunks  {doc.embed_tokens:6} tokens")
+                done = doc.concepts_status == "done"
+                concepts = f"{doc.num_concepts} concepts" if done else f"concepts {doc.concepts_status}"
+                print(f"  ok    {path.name:45} {doc.num_chunks:3} chunks  {doc.embed_tokens:6} tokens  {concepts}")
             else:
                 failed += 1
                 print(f"  FAIL  {path.name:45} {doc.error}")
@@ -97,6 +100,7 @@ async def main() -> int:
     print(f"\nIndexed {total_chunks} chunks, {total_tokens} embedding tokens, ${total_cost:.6f}. Failed: {failed}")
     shutdown_tracing()
     await vectorstore.close()
+    await graph_store.close()
     await engine.dispose()
     return 1 if failed else 0
 

@@ -5,16 +5,29 @@ graph databases, query rewriting and routing, agents, human-in-the-loop, evaluat
 guardrails and tracing.
 
 - What we're building and why: [PLAN.md](PLAN.md)
-- What you learn in each phase: [docs/](docs/) (start with [docs/phase-0.md](docs/phase-0.md); Phase 2: [docs/phase-2.md](docs/phase-2.md))
+- What you learn in each phase: [docs/](docs/) (start with [docs/phase-0.md](docs/phase-0.md); Phase 3: [docs/phase-3.md](docs/phase-3.md))
 - The planted "stories" in the dummy data: [data/seed_stories.md](data/seed_stories.md)
 - Interview prep per phase (approach, alternatives, cross-questions): [docs/interview/](docs/interview/)
 
-**Current phase: 2 (better retrieval).** Hybrid search (meaning + BM25 keywords, fused with RRF), a local
+**Current phase: 3 (concept graph), part 3a done.** After a file is indexed, an LLM extracts its key concepts
+and prerequisites with structured output, every concept is checked against a quote from the file, duplicates
+are merged across files, and the result goes into Neo4j as **drafts** (teacher review and learning paths come
+next). Measured with `uv run python -m app.evals.concepts`.
+
+**Phase 2 (better retrieval):** hybrid search (meaning + BM25 keywords, fused with RRF), a local
 cross-encoder reranker, follow-up questions (query rewriting), a corrective retry, "Search in" filters, and
 a "Show details" panel that shows how each answer was found. Every step is measured with
 `uv run python -m app.evals.retrieval --compare`.
 Phase 1 gave us the upload pipeline and basic RAG; Phase 0 the dummy login, portals, seed data and a safe
 LLM gateway (retries, circuit breaker, daily budget, Langfuse).
+
+**Upgrading from Phase 2?** Pull, start Neo4j (`docker compose up -d`), then (from `backend/`):
+
+```powershell
+uv run uvicorn app.main:app --reload --port 8000   # adds the new columns; Ctrl+C after it starts
+uv run python -m app.graph.backfill                # ONE time: concepts for the files you already have (~$0.05)
+uv run python -m app.evals.concepts --show         # how close the graph is to the authors' prerequisites
+```
 
 **Upgrading from Phase 1?** Pull, then (from `backend/`):
 
@@ -90,9 +103,9 @@ Admin UIs: Qdrant <http://localhost:6333/dashboard>, Neo4j <http://localhost:747
 ```powershell
 cd backend
 uv sync                                  # creates .venv and installs everything
-uv run pytest                            # 68 tests, no database or API key needed
+uv run pytest                            # 81 tests; 2 use Neo4j and are skipped when it isn't running
 uv run python -m app.seed --reset        # create tables + load dummy data
-uv run python -m app.ingest.load_samples # index the 24 sample course files (~$0.0003 of embeddings)
+uv run python -m app.ingest.load_samples # index the 24 sample files + extract their concepts (~$0.05)
 uv run uvicorn app.main:app --reload --port 8000
 ```
 
@@ -140,8 +153,16 @@ Open <http://localhost:3000>.
 17. Click a citation number like **1** in an answer: it jumps to that source.
 18. Run `uv run python -m app.evals.retrieval --compare` and read the table: which step fixed which questions?
 
-Then work through the experiments in [docs/phase-0.md](docs/phase-0.md), [docs/phase-1.md](docs/phase-1.md)
-and [docs/phase-2.md](docs/phase-2.md).
+**Phase 3:**
+
+19. As **Rahul Gupta**, open **Course files**: the new **Concepts** column shows how many draft concepts each
+    file produced. Click it to see each concept with its definition, prerequisites ("Learn first") and the
+    sentence it was found in.
+20. Open Neo4j (<http://localhost:7474>) and run `MATCH p=(:Concept)-[:REQUIRES*1..3]->() RETURN p LIMIT 100`.
+21. Run `uv run python -m app.evals.concepts --show` and read which topics or prerequisites were missed.
+
+Then work through the experiments in [docs/phase-0.md](docs/phase-0.md), [docs/phase-1.md](docs/phase-1.md),
+[docs/phase-2.md](docs/phase-2.md) and [docs/phase-3.md](docs/phase-3.md).
 
 ---
 

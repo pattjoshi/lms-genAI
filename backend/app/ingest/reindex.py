@@ -61,7 +61,7 @@ async def main(force: bool) -> int:
     failed = 0
     async with SessionLocal() as session:
         for doc_id, name in targets:
-            await process_document(doc_id)
+            await process_document(doc_id, extract_concepts=False)
             doc = await session.get(Document, doc_id)
             await session.refresh(doc)
             if doc.status == DocumentStatus.ready:

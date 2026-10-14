@@ -257,6 +257,21 @@ class Document(Base):
     superseded_at: Mapped[datetime | None] = mapped_column(
         DateTime(timezone=True), comment="Set when a newer version went live; this version is no longer searchable"
     )
+    # Phase 3: concept extraction runs after indexing. It has its own status, so a failure
+    # here never takes a file out of search.
+    concepts_status: Mapped[str] = mapped_column(
+        String(20),
+        default="pending",
+        server_default="pending",
+        comment="pending | extracting | done | failed | off (concept extraction into the Neo4j graph)",
+    )
+    concepts_error: Mapped[str | None] = mapped_column(Text)
+    num_concepts: Mapped[int] = mapped_column(
+        Integer, default=0, server_default="0", comment="Concepts extracted from this file"
+    )
+    concepts_cost_usd: Mapped[float] = mapped_column(
+        Float, default=0.0, server_default="0", comment="LLM + embedding cost of the extraction"
+    )
 
 
 class Chunk(Base):

@@ -9,8 +9,8 @@ Every feature (hello test now; doubt answering, extraction, SQL... later) calls
     4. record tokens/cost/latency -> llm_usage table (success AND failure)
     5. Langfuse trace             -> attached through the LangChain callback
 
-`chat_stream()` does the same for token-by-token answers, and `embed_texts()` for
-embeddings (Phase 1).
+`chat_stream()` does the same for token-by-token answers, `embed_texts()` for
+embeddings (Phase 1), and `chat_structured()` for answers that must be JSON (Phase 3).
 """
 
 import time
@@ -20,6 +20,7 @@ from dataclasses import dataclass, field
 from langchain_core.messages import BaseMessage
 from langchain_openai import ChatOpenAI
 from openai import AsyncOpenAI
+from pydantic import BaseModel
 from sqlalchemy.ext.asyncio import AsyncSession
 
 from app.config import Settings, get_settings
@@ -86,10 +87,49 @@ async def chat(
     max_tokens: int | None = None,
     session_id: str | None = None,
 ) -> LLMResult:
+    model = build_chat_model(get_settings(), max_tokens)
+    response, result = await _invoke(session, model, messages, feature, user, session_id, raw=lambda r: r)
+    result.text = str(response.content)
+    return result
+
+
+async def chat_structured[T: BaseModel](
+    session: AsyncSession,
+    *,
+    messages: list[BaseMessage],
+    schema: type[T],
+    feature: str,
+    user: User | None,
+    max_tokens: int | None = None,
+) -> tuple[T, LLMResult]:
+    """Like chat(), but the answer is an object of `schema` instead of free text (Phase 3).
+
+    OpenAI's "structured outputs" (json_schema, strict) constrains the model's decoding to
+    the JSON schema generated from the pydantic class, so the JSON always parses and has
+    every field. It does NOT make the content correct: callers still check the values
+    (e.g. that a quoted sentence really is in the source text).
+    """
+    model = build_chat_model(get_settings(), max_tokens).with_structured_output(
+        schema, method="json_schema", strict=True, include_raw=True
+    )
+    out, result = await _invoke(session, model, messages, feature, user, None, raw=lambda r: r["raw"])
+    if out["parsed"] is None:
+        # Only happens when the output was cut off (max_tokens) or the model refused.
+        raise LLMUnavailableError(
+            "The AI returned an incomplete answer. Please try again.",
+            code="bad_structured_output",
+            detail=repr(out.get("parsing_error")),
+        )
+    result.text = out["raw"].content if isinstance(out["raw"].content, str) else ""
+    return out["parsed"], result
+
+
+async def _invoke(session, runnable, messages, feature, user, session_id, *, raw) -> tuple:
+    """Steps 1-5 of the module docstring around one call. `raw(response)` returns the
+    AIMessage, which carries the token usage."""
     settings = get_settings()
     openai_breaker.before_call()
     await ensure_budget_available(session, settings)
-    model = build_chat_model(settings, max_tokens)
 
     config = {
         "callbacks": langfuse_callbacks(settings),
@@ -100,7 +140,7 @@ async def chat(
     started = time.perf_counter()
     try:
         response, attempts = await call_with_retry(
-            lambda: model.ainvoke(messages, config=config),
+            lambda: runnable.ainvoke(messages, config=config),
             breaker=openai_breaker,
             max_retries=settings.llm_max_retries,
             base_delay=settings.llm_retry_base_delay_seconds,
@@ -120,7 +160,7 @@ async def chat(
         raise
 
     latency_ms = int((time.perf_counter() - started) * 1000)
-    usage = response.usage_metadata or {}
+    usage = raw(response).usage_metadata or {}
     input_tokens = int(usage.get("input_tokens", 0))
     output_tokens = int(usage.get("output_tokens", 0))
     cost = chat_cost_usd(input_tokens, output_tokens, settings)
@@ -137,8 +177,8 @@ async def chat(
         attempts=attempts,
         status="success",
     )
-    return LLMResult(
-        text=str(response.content),
+    return response, LLMResult(
+        text="",
         model=settings.openai_chat_model,
         input_tokens=input_tokens,
         output_tokens=output_tokens,

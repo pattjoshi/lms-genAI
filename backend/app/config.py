@@ -90,6 +90,15 @@ class Settings(BaseSettings):
     reranker_model: str = "Xenova/ms-marco-MiniLM-L-6-v2"  # ~80 MB, runs on CPU (ONNX)
     model_cache_dir: Path = BACKEND_DIR / "storage" / "models"  # downloaded once, reused
 
+    # --- Phase 3: concept graph ---
+    concept_extraction: bool = True  # extract concepts + prerequisites after a file is indexed
+    concept_max_section_chars: int = 6000  # longer sections are sent in several parts
+    concept_max_output_tokens: int = 1500
+    # Two concepts with embedding similarity >= this are the SAME concept (auto-merged, name kept as alias)
+    concept_merge_threshold: float = 0.90
+    # >= this (but below the merge threshold): kept apart, flagged "possible duplicate" for the teacher
+    concept_suggest_threshold: float = 0.80
+
     # --- Langfuse (tracing) ---
     langfuse_public_key: str | None = None
     langfuse_secret_key: SecretStr | None = None

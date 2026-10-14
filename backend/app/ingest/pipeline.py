@@ -18,6 +18,7 @@ from sqlalchemy.ext.asyncio import AsyncSession
 
 from app.config import get_settings
 from app.db import SessionLocal
+from app.graph.extract import extract_document
 from app.ingest.chunker import chunk_sections
 from app.ingest.parsers import ParseError, parse_file
 from app.ingest.tagger import fill_missing_headings, tag_chunk
@@ -35,8 +36,11 @@ async def _set_status(session: AsyncSession, doc: Document, status: DocumentStat
     await session.commit()
 
 
-async def process_document(document_id: int) -> None:
-    """Run the whole pipeline for one document. Safe to call again (re-processing)."""
+async def process_document(document_id: int, extract_concepts: bool = True) -> None:
+    """Run the whole pipeline for one document. Safe to call again (re-processing).
+
+    `extract_concepts=False` rebuilds only the search index (the re-index script), so the
+    concept graph and its LLM cost are left alone."""
     async with SessionLocal() as session:
         doc = await session.get(Document, document_id)
         if doc is None or doc.superseded_at is not None:
@@ -56,6 +60,11 @@ async def process_document(document_id: int) -> None:
                 doc.error = f"Unexpected error: {type(exc).__name__}: {exc}"[:500]
             doc.status = DocumentStatus.failed
             await session.commit()
+            return
+    # Phase 3: the file is searchable now; build its part of the concept graph.
+    # Separate status and session: a failure there never takes the file out of search.
+    if extract_concepts:
+        await extract_document(document_id)
 
 
 async def _run(session: AsyncSession, doc: Document, uploader: User | None) -> None:
