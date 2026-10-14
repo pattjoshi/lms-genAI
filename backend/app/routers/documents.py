@@ -1,5 +1,6 @@
 """Teacher (own courses) and admin (all courses): upload, list, preview, delete course files."""
 
+import logging
 from pathlib import Path
 
 from fastapi import APIRouter, BackgroundTasks, Depends, File, Form, HTTPException, UploadFile
@@ -7,6 +8,8 @@ from fastapi.responses import JSONResponse
 from sqlalchemy import select
 
 from app.auth import SessionDep, require_roles
+from app.graph import store as graph
+from app.graph.extract import extract_document
 from app.ingest.parsers import ParseError
 from app.ingest.pipeline import process_document
 from app.ingest.storage import UploadAction, UploadRefused, store_upload
@@ -15,6 +18,7 @@ from app.permissions import PermissionDenied
 from app.rag import vectorstore
 from app.scopes import manageable_course_ids
 
+log = logging.getLogger(__name__)
 router = APIRouter(prefix="/documents", tags=["documents"])
 Manager = Depends(require_roles(Role.teacher, Role.admin))
 
@@ -36,6 +40,10 @@ def _doc_out(d: Document, course: Course | None = None, module: Module | None = 
         "created_at": d.created_at.isoformat() if d.created_at else None,
         "version": d.version,
         "replaces_id": d.replaces_id,
+        "concepts_status": d.concepts_status,
+        "concepts_error": d.concepts_error,
+        "num_concepts": d.num_concepts,
+        "concepts_cost_usd": d.concepts_cost_usd,
     }
 
 
@@ -167,6 +175,27 @@ async def document_chunks(document_id: int, session: SessionDep, user: User = Ma
     }
 
 
+@router.get("/{document_id}/concepts")
+async def document_concepts(document_id: int, session: SessionDep, user: User = Manager):
+    """Draft concepts the AI extracted from this file, with prerequisites and the quoted evidence."""
+    doc = await _get_managed_doc(session, user, document_id)
+    return {"document": _doc_out(doc), "concepts": await graph.document_concepts(doc.id)}
+
+
+@router.post("/{document_id}/concepts/extract", status_code=202)
+async def extract_concepts(document_id: int, session: SessionDep, background: BackgroundTasks, user: User = Manager):
+    """Run concept extraction again for one file (e.g. after it failed, or a prompt change)."""
+    doc = await _get_managed_doc(session, user, document_id)
+    if doc.superseded_at is not None or doc.status != DocumentStatus.ready:
+        raise HTTPException(409, "Concepts can be extracted only from the current, ready version of a file.")
+    if doc.concepts_status == "extracting":
+        raise HTTPException(409, "Concepts are already being extracted from this file.")
+    doc.concepts_status = "extracting"  # set now, so a double click can't start two runs
+    await session.commit()
+    background.add_task(extract_document, doc.id)
+    return _doc_out(doc)
+
+
 @router.delete("/{document_id}", status_code=204)
 async def delete_document(document_id: int, session: SessionDep, user: User = Manager):
     """Delete a file together with all its older versions."""
@@ -181,6 +210,11 @@ async def delete_document(document_id: int, session: SessionDep, user: User = Ma
     # searchable chunks that point to a file that no longer exists.
     for d in versions:
         await vectorstore.delete_document(d.id)
+    for d in versions:
+        try:
+            await graph.remove_document(d.id, d.course_id)
+        except Exception as exc:  # noqa: BLE001 - Neo4j down must not block a delete
+            log.warning("Could not remove document %s from the concept graph: %s", d.id, exc)
     for d in versions:  # newest first, so no row is deleted while a newer one still points at it
         await session.delete(d)  # chunks are removed by ON DELETE CASCADE
         await session.flush()

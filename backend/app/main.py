@@ -12,6 +12,7 @@ from fastapi import FastAPI, Request
 from fastapi.exceptions import RequestValidationError
 from fastapi.middleware.cors import CORSMiddleware
 from fastapi.responses import JSONResponse
+from neo4j.exceptions import ServiceUnavailable
 from sqlalchemy import func, select, update
 from sqlalchemy.exc import OperationalError, ProgrammingError
 from starlette.exceptions import HTTPException
@@ -19,11 +20,12 @@ from starlette.exceptions import HTTPException
 from app import models  # noqa: F401 - registers all tables
 from app.config import get_settings
 from app.db import engine
+from app.graph import store as graph_store
 from app.llm.errors import LLMError
 from app.llm.tracing import init_tracing, shutdown_tracing
 from app.permissions import PermissionDenied
 from app.rag import reranker, vectorstore
-from app.routers import ai, auth, chat, data, documents, health, portal
+from app.routers import ai, auth, chat, concepts, data, documents, health, portal
 from app.schema import ensure_schema
 
 logging.basicConfig(level=logging.INFO, format="%(asctime)s %(levelname)-7s %(name)s: %(message)s")
@@ -43,6 +45,13 @@ async def _fail_interrupted_documents() -> None:
             )
             if result.rowcount:
                 log.warning("Marked %d interrupted document(s) as failed.", result.rowcount)
+            result = await conn.execute(
+                update(models.Document)
+                .where(models.Document.concepts_status == "extracting")
+                .values(concepts_status="failed", concepts_error="Interrupted by a server restart. Click Retry.")
+            )
+            if result.rowcount:
+                log.warning("Marked %d interrupted concept extraction(s) as failed.", result.rowcount)
     except Exception as exc:  # noqa: BLE001
         log.warning("Could not check for interrupted documents: %s", exc)
 
@@ -78,6 +87,10 @@ async def lifespan(_: FastAPI):
         log.warning("Could not create/upgrade tables at startup: %s", exc)
     await _fail_interrupted_documents()
     await _check_search_index()
+    try:
+        await graph_store.ensure_constraints()
+    except Exception as exc:  # noqa: BLE001 - Neo4j down: /health shows it, extraction reports it
+        log.warning("Could not prepare the Neo4j concept graph at startup: %s", exc)
     # Load the reranker in the background (the first run downloads ~80 MB), so the first
     # question doesn't wait for it. Failures are only logged: answers work without it.
     warm_up = asyncio.create_task(reranker.warm_up()) if settings.rag_rerank else None
@@ -86,6 +99,7 @@ async def lifespan(_: FastAPI):
         warm_up.cancel()
     shutdown_tracing()
     await vectorstore.close()
+    await graph_store.close()
     await engine.dispose()
 
 
@@ -97,7 +111,16 @@ app.add_middleware(
     allow_headers=["*"],
 )
 
-for r in (health.router, auth.router, portal.router, data.router, ai.router, documents.router, chat.router):
+for r in (
+    health.router,
+    auth.router,
+    portal.router,
+    data.router,
+    ai.router,
+    documents.router,
+    chat.router,
+    concepts.router,
+):
     app.include_router(r)
 
 
@@ -152,6 +175,11 @@ async def service_down(_: Request, exc: ConnectionRefusedError):
     return _error(
         503, "service_unavailable", "A database is not reachable. Is `docker compose up -d` running?", str(exc)[:300]
     )
+
+
+@app.exception_handler(ServiceUnavailable)
+async def graph_down(_: Request, exc: ServiceUnavailable):
+    return _error(503, "graph_unavailable", "Cannot reach Neo4j. Is `docker compose up -d` running?", str(exc)[:300])
 
 
 @app.exception_handler(Exception)

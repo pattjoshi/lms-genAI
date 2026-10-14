@@ -1,9 +1,9 @@
 "use client";
 
 // Course files: upload, watch each file move through the pipeline, preview the chunks
-// the AI will search, and re-process or delete files.
+// the AI will search and the concepts it extracted, and re-process or delete files.
 
-import { Eye, FileText, Layers, RotateCw, Trash2, Upload } from "lucide-react";
+import { Eye, FileText, Layers, Network, RotateCw, Trash2, Upload } from "lucide-react";
 import { useCallback, useEffect, useMemo, useState } from "react";
 
 import { PortalShell } from "@/components/PortalShell";
@@ -27,6 +27,23 @@ type Doc = {
   course_code: string | null;
   module_title: string | null;
   version: number;
+  concepts_status: "pending" | "extracting" | "done" | "failed" | "off";
+  concepts_error: string | null;
+  num_concepts: number;
+  concepts_cost_usd: number;
+};
+
+type ConceptRow = {
+  uid: string;
+  name: string;
+  definition: string | null;
+  status: string;
+  aliases: string[];
+  possible_duplicate_of: string | null;
+  section: string | null;
+  pages: number[];
+  evidence: string;
+  prerequisites: { uid: string; name: string; status: string }[];
 };
 
 type ChunkRow = {
@@ -56,6 +73,49 @@ function StatusBadge({ doc }: { doc: Doc }) {
       {doc.status} {step}/{STEPS.length - 1}
     </span>
   );
+}
+
+function ConceptsBadge({ doc, onOpen, onRetry }: { doc: Doc; onOpen: () => void; onRetry: () => void }) {
+  if (doc.status !== "ready") return <span className="text-xs text-faint">–</span>;
+  switch (doc.concepts_status) {
+    case "done":
+      return (
+        <button
+          onClick={onOpen}
+          title={`Extraction cost $${doc.concepts_cost_usd.toFixed(5)}`}
+          className="rounded-full bg-brand-soft px-2 py-0.5 text-xs font-medium text-brand-ink hover:underline"
+        >
+          {doc.num_concepts} drafts
+        </button>
+      );
+    case "extracting":
+      return (
+        <span className="inline-flex items-center gap-1.5 rounded-full bg-brand-soft px-2 py-0.5 text-xs font-medium text-brand-ink">
+          <span className="h-1.5 w-1.5 animate-pulse rounded-full bg-brand" />
+          extracting
+        </span>
+      );
+    case "failed":
+      return (
+        <div className="max-w-xs">
+          <button
+            onClick={onRetry}
+            className="rounded-full bg-bad-soft px-2 py-0.5 text-xs font-medium text-bad hover:underline"
+          >
+            failed · retry
+          </button>
+          {doc.concepts_error && <p className="mt-1 text-xs text-bad">{doc.concepts_error}</p>}
+        </div>
+      );
+    case "off":
+      return <span className="text-xs text-faint">off</span>;
+    default:
+      return (
+        <button onClick={onRetry} className="text-xs text-muted hover:text-fg hover:underline">
+          extract
+        </button>
+      );
+  }
 }
 
 function UploadForm({ options, onUploaded }: { options: Option[]; onUploaded: () => void }) {
@@ -216,11 +276,79 @@ function ChunkPreview({ docId, onClose }: { docId: number; onClose: () => void }
   );
 }
 
+function ConceptPreview({
+  docId,
+  onClose,
+  onReextract,
+}: {
+  docId: number;
+  onClose: () => void;
+  onReextract: () => void;
+}) {
+  const { data, error } = useApi<{ document: Doc; concepts: ConceptRow[] }>(`/documents/${docId}/concepts`);
+  return (
+    <Card
+      title={data ? `Concepts in ${data.document.file_name}` : "Concepts"}
+      subtitle="Drafts extracted by the AI, each with the sentence it was found in. Review comes next: nothing here reaches students yet."
+      icon={<Network className="h-4 w-4" />}
+      action={
+        <div className="flex gap-1">
+          <Button variant="ghost" onClick={onReextract}>
+            <RotateCw className="h-4 w-4" />
+            Re-extract
+          </Button>
+          <Button variant="ghost" onClick={onClose}>
+            Close
+          </Button>
+        </div>
+      }
+    >
+      {error && <Alert title={error.message} />}
+      {!data && !error && <SkeletonCard />}
+      {data && (
+        <div className="space-y-3">
+          {data.concepts.length === 0 && (
+            <EmptyState title="No concepts" hint="Extraction may still be running, or it found nothing." />
+          )}
+          {data.concepts.map((c) => (
+            <div key={c.uid} className="rounded-xl border border-line p-3">
+              <div className="mb-1 flex flex-wrap items-center gap-1.5">
+                <span className="font-medium text-fg">{c.name}</span>
+                <Chip>{c.status}</Chip>
+                {c.aliases.length > 0 && <span className="text-xs text-faint">also: {c.aliases.join(", ")}</span>}
+                {c.possible_duplicate_of && (
+                  <span className="rounded-full bg-warn-soft px-2 py-0.5 text-xs font-medium text-warn">
+                    possible duplicate of {c.possible_duplicate_of.split(":").slice(1).join(":")}
+                  </span>
+                )}
+                <span className="ml-auto text-xs text-faint">
+                  {c.pages.length > 0 ? `page ${c.pages.join(", ")}` : c.section}
+                </span>
+              </div>
+              {c.definition && <p className="text-sm text-muted">{c.definition}</p>}
+              <p className="mt-1 border-l-2 border-line pl-2 text-xs italic text-faint">“{c.evidence}”</p>
+              {c.prerequisites.length > 0 && (
+                <div className="mt-2 flex flex-wrap items-center gap-1.5 text-xs text-muted">
+                  Learn first:
+                  {c.prerequisites.map((p) => (
+                    <Chip key={p.uid}>{p.name}</Chip>
+                  ))}
+                </div>
+              )}
+            </div>
+          ))}
+        </div>
+      )}
+    </Card>
+  );
+}
+
 function CourseFiles() {
   const options = useApi<Option[]>("/documents/options");
   const [docs, setDocs] = useState<Doc[] | null>(null);
   const [error, setError] = useState<ApiError | null>(null);
   const [preview, setPreview] = useState<number | null>(null);
+  const [concepts, setConcepts] = useState<number | null>(null);
 
   const load = useCallback(async () => {
     try {
@@ -231,7 +359,10 @@ function CourseFiles() {
     }
   }, []);
 
-  const processing = useMemo(() => docs?.some((d) => PROCESSING.has(d.status)) ?? false, [docs]);
+  const processing = useMemo(
+    () => docs?.some((d) => PROCESSING.has(d.status) || d.concepts_status === "extracting") ?? false,
+    [docs],
+  );
 
   useEffect(() => {
     load();
@@ -244,7 +375,7 @@ function CourseFiles() {
     return () => clearInterval(timer);
   }, [processing, load]);
 
-  async function act(doc: Doc, action: "reprocess" | "delete") {
+  async function act(doc: Doc, action: "reprocess" | "delete" | "extract") {
     if (
       action === "delete" &&
       !confirm(
@@ -254,8 +385,10 @@ function CourseFiles() {
       return;
     try {
       if (action === "delete") await apiFetch(`/documents/${doc.id}`, { method: "DELETE" });
+      else if (action === "extract") await apiFetch(`/documents/${doc.id}/concepts/extract`, { method: "POST" });
       else await apiFetch(`/documents/${doc.id}/reprocess`, { method: "POST" });
       if (preview === doc.id) setPreview(null);
+      if (concepts === doc.id) setConcepts(null);
       await load();
     } catch (e) {
       setError(e instanceof ApiError ? e : new ApiError(0, "unknown", String(e)));
@@ -287,7 +420,7 @@ function CourseFiles() {
             <table className="w-full text-left text-sm">
               <thead className="bg-surface-2/70 text-xs text-muted">
                 <tr>
-                  {["File", "Module", "Status", "Chunks", "Tokens", "Cost", ""].map((h) => (
+                  {["File", "Module", "Status", "Chunks", "Tokens", "Cost", "Concepts", ""].map((h) => (
                     <th key={h} className="whitespace-nowrap px-3 py-2 font-medium">
                       {h}
                     </th>
@@ -323,6 +456,9 @@ function CourseFiles() {
                     <td className="px-3 py-2.5 font-mono text-xs">{d.num_chunks}</td>
                     <td className="px-3 py-2.5 font-mono text-xs">{d.embed_tokens}</td>
                     <td className="px-3 py-2.5 font-mono text-xs">${d.embed_cost_usd.toFixed(6)}</td>
+                    <td className="px-3 py-2.5">
+                      <ConceptsBadge doc={d} onOpen={() => setConcepts(d.id)} onRetry={() => act(d, "extract")} />
+                    </td>
                     <td className="px-3 py-2.5">
                       <div className="flex justify-end gap-1">
                         <button
@@ -360,6 +496,17 @@ function CourseFiles() {
       </Card>
 
       {preview !== null && <ChunkPreview key={preview} docId={preview} onClose={() => setPreview(null)} />}
+      {concepts !== null && (
+        <ConceptPreview
+          key={concepts}
+          docId={concepts}
+          onClose={() => setConcepts(null)}
+          onReextract={() => {
+            const doc = docs?.find((d) => d.id === concepts);
+            if (doc) act(doc, "extract");
+          }}
+        />
+      )}
     </>
   );
 }

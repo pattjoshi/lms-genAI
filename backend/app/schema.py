@@ -26,6 +26,11 @@ UPGRADES = [
     "CREATE INDEX IF NOT EXISTS ix_doubts_conversation_id ON doubts (conversation_id)",
     "ALTER TABLE doubts ADD COLUMN IF NOT EXISTS search_query TEXT",
     "ALTER TABLE doubts ADD COLUMN IF NOT EXISTS top_rerank_score DOUBLE PRECISION",
+    # Phase 3: concept extraction status per file
+    "ALTER TABLE documents ADD COLUMN IF NOT EXISTS concepts_status VARCHAR(20) NOT NULL DEFAULT 'pending'",
+    "ALTER TABLE documents ADD COLUMN IF NOT EXISTS concepts_error TEXT",
+    "ALTER TABLE documents ADD COLUMN IF NOT EXISTS num_concepts INTEGER NOT NULL DEFAULT 0",
+    "ALTER TABLE documents ADD COLUMN IF NOT EXISTS concepts_cost_usd DOUBLE PRECISION NOT NULL DEFAULT 0",
 ]
 
 
