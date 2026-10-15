@@ -17,7 +17,7 @@ import time
 from collections.abc import AsyncIterator
 from dataclasses import dataclass, field
 
-from langchain_core.messages import BaseMessage
+from langchain_core.messages import AIMessage, BaseMessage
 from langchain_openai import ChatOpenAI
 from openai import AsyncOpenAI
 from pydantic import BaseModel
@@ -122,6 +122,25 @@ async def chat_structured[T: BaseModel](
         )
     result.text = out["raw"].content if isinstance(out["raw"].content, str) else ""
     return out["parsed"], result
+
+
+async def chat_with_tools(
+    session: AsyncSession,
+    *,
+    messages: list[BaseMessage],
+    tools: list,
+    feature: str,
+    user: User | None,
+    max_tokens: int | None = None,
+    tool_choice: str | None = None,
+) -> tuple[AIMessage, LLMResult]:
+    """One step of a tool-calling loop (Phase 4b): the model either asks for tool calls
+    (`message.tool_calls`) or answers in `message.content`. Same gateway as chat(): budget,
+    retries, usage row, trace. The loop itself, and running the tools, is the caller's job."""
+    model = build_chat_model(get_settings(), max_tokens).bind_tools(tools, tool_choice=tool_choice)
+    response, result = await _invoke(session, model, messages, feature, user, None, raw=lambda r: r)
+    result.text = response.content if isinstance(response.content, str) else ""
+    return response, result
 
 
 async def _invoke(session, runnable, messages, feature, user, session_id, *, raw) -> tuple:

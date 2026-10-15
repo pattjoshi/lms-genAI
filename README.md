@@ -9,13 +9,14 @@ guardrails and tracing.
 - The planted "stories" in the dummy data: [data/seed_stories.md](data/seed_stories.md)
 - Interview prep per phase (approach, alternatives, cross-questions): [docs/interview/](docs/interview/)
 
-**Current phase: 4a (routing and agent), done.** **Ask a doubt** is now one chat box for everything: each
+**Current phase: 4 (routing, agent and MCP), done.** **Ask a doubt** is one chat box for everything: each
 message is routed (rules first, then nearest example embeddings, then a small LLM classifier) to a course
 answer, a learning path (*"I don't understand backprop"*), practice questions (*"Quiz me on joins"*), your
-progress (*"What are my weak topics?"*) or account help (*"I forgot my password"*). A LangGraph agent runs
-the branch, and the route line above each answer shows how it was decided. The assistant remembers weak
-topics (quiz scores plus what you asked and practised), learning paths mark steps you already know, and
-answers show a confidence level with a "Not sure" warning. Phase 4b (our LMS as an MCP server) comes next.
+progress (*"What are my weak topics?"*), account help (*"I forgot my password"*) or, for open requests
+(*"What should I study today?"*), a tool-calling assistant. The assistant remembers weak topics, learning
+paths mark steps you already know, and answers show a confidence level. The LMS is also an **MCP server**:
+create a token on **MCP access** and use your courses from Claude Desktop, Cursor or MCP Inspector, with the
+same permissions as the web app; the chat's assistant calls the same tools as an MCP client.
 
 **Phase 3 (concept graph and quizzes):** an LLM extracts concepts and prerequisites from each file into
 Neo4j as drafts, teachers review them, and students get learning paths of approved concepts. Teachers
@@ -27,6 +28,9 @@ a "Show details" panel that shows how each answer was found. Every step is measu
 `uv run python -m app.evals.retrieval --compare`.
 Phase 1 gave us the upload pipeline and basic RAG; Phase 0 the dummy login, portals, seed data and a safe
 LLM gateway (retries, circuit breaker, daily budget, Langfuse).
+
+**Upgrading from Phase 3?** Pull, then `uv sync` (from `backend/`; adds the MCP SDK and
+`langchain-mcp-adapters`) and start the backend once: it adds the new tables.
 
 **Upgrading from Phase 2?** Pull, start Neo4j (`docker compose up -d`), then (from `backend/`):
 
@@ -110,7 +114,7 @@ Admin UIs: Qdrant <http://localhost:6333/dashboard>, Neo4j <http://localhost:747
 ```powershell
 cd backend
 uv sync                                  # creates .venv and installs everything
-uv run pytest                            # 122 tests; 5 use Neo4j and are skipped when it isn't running
+uv run pytest                            # 136 tests; 5 use Neo4j and are skipped when it isn't running
 uv run python -m app.seed --reset        # create tables + load dummy data
 uv run python -m app.ingest.load_samples # index the 24 sample files + extract their concepts (~$0.05)
 uv run uvicorn app.main:app --reload --port 8000
@@ -183,6 +187,10 @@ Open <http://localhost:3000>.
     "Learning path · matched a rule", and the path marks the steps her quiz scores show she knows.
 28. Ask *"Quiz me on backpropagation"*, answer the questions, then ask *"What are my weak topics?"*.
 29. As **Karan Verma**, ask *"I can't log in"*: the answer lists Karan's own failed logins, with no LLM call.
+30. As **Riya**, ask *"What should I study today?"*: the "MCP tools" line shows which tools the assistant called.
+31. Open **MCP access**, create a token, run `npx @modelcontextprotocol/inspector`, connect to
+    `http://localhost:8000/mcp` (Streamable HTTP) with the header `Authorization: Bearer <token>` and call
+    `get_learning_path`. Then call `list_students`: refused, because Riya is a student.
 
 Then work through the experiments in [docs/phase-0.md](docs/phase-0.md), [docs/phase-1.md](docs/phase-1.md),
 [docs/phase-2.md](docs/phase-2.md), [docs/phase-3.md](docs/phase-3.md) and [docs/phase-4.md](docs/phase-4.md).

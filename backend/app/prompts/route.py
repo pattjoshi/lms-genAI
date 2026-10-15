@@ -14,6 +14,7 @@ Intents:
 - practice: the student wants practice or quiz questions to test themselves.
 - progress: the student asks about their own progress, scores or weak topics.
 - support: a problem with their account, login, password, OTP, payment or refund. Not course content.
+- assistant: an open or multi-step request about their own studies that combines the above, e.g. a study plan, "what should I do next", "find my weakest topic and what to read for it". Not a single course question.
 
 Examples:
 {examples}

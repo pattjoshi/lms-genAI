@@ -19,7 +19,7 @@ import {
 } from "lucide-react";
 import { useEffect, useRef, useState } from "react";
 
-import { ChatCard, RouteLine, type CardData, type RouteInfo } from "@/components/ChatCards";
+import { ChatCard, RouteLine, ToolSteps, type CardData, type RouteInfo, type ToolStep } from "@/components/ChatCards";
 import { PortalShell } from "@/components/PortalShell";
 import { Alert, Button, Card, Chip, EmptyState } from "@/components/ui";
 import { useApi } from "@/components/useApi";
@@ -87,6 +87,7 @@ type Turn = {
   sources: Source[];
   route?: RouteInfo;
   cards?: CardData[];
+  tools?: ToolStep[];
   details?: Details;
   done?: Done;
   error?: { code: string; message: string };
@@ -100,6 +101,7 @@ const SUGGESTIONS = [
   "I don't understand backpropagation",
   "Quiz me on my weak topics",
   "What are my weak topics?",
+  "What should I study today?",
   "What's the difference between a list and a tuple?",
 ];
 
@@ -369,6 +371,7 @@ function TurnView({
         <div className="min-w-0 flex-1 space-y-3">
           <div className="rounded-2xl rounded-tl-md border border-line bg-surface px-4 py-3">
             {turn.route && <RouteLine route={turn.route} />}
+            {turn.tools && <ToolSteps steps={turn.tools} />}
             {turn.answer ? (
               <AnswerText text={turn.answer} onCite={cite} />
             ) : (
@@ -561,6 +564,7 @@ function AskDoubt() {
         (event, data) => {
           if (event === "route") update((t) => ({ ...t, route: data }));
           else if (event === "card") update((t) => ({ ...t, cards: [...(t.cards ?? []), data] }));
+          else if (event === "tool") update((t) => ({ ...t, tools: [...(t.tools ?? []), data] }));
           else if (event === "sources") update((t) => ({ ...t, sources: data.sources, details: data.retrieval }));
           else if (event === "token") update((t) => ({ ...t, answer: t.answer + data.text }));
           else if (event === "done") update((t) => ({ ...t, done: data }));

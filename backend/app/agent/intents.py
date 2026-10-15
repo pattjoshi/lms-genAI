@@ -5,6 +5,7 @@
     practice       "quiz me on X", "practice my weak topics"      -> AI practice questions, graded with explanation
     progress       "what are my weak topics?", "how am I doing?"  -> what the assistant remembers about you
     support        login, password, payment, refund problems     -> your own login / payment records + next steps
+    assistant      "what should I study today?", several steps    -> tool-calling agent over our MCP tools (4b)
 
 Routing is done cheapest first (router.py): these RULES, then EMBEDDINGS against the EXAMPLES below,
 and only if both are unsure, an LLM. Rules are written for precision, not recall: a rule that fires must
@@ -22,6 +23,7 @@ class Intent(StrEnum):
     practice = "practice"
     progress = "progress"
     support = "support"
+    assistant = "assistant"
 
 
 # What each intent sounds like. Used by the embedding router (nearest examples) and shown to the LLM
@@ -70,6 +72,14 @@ EXAMPLES: dict[Intent, list[str]] = {
         "I want a refund for my course",
         "I was charged twice for the course",
     ],
+    Intent.assistant: [
+        "What should I study today?",
+        "Make me a study plan for this week",
+        "Which of my weak topics should I fix first, and what should I read for it?",
+        "Find my weakest topic and show me where my notes explain it",
+        "Plan my revision before the deep learning exam",
+        "Look at my progress and tell me what to do next",
+    ],
 }
 
 # Intents that need a topic (X). Practice works without one: it uses the weak topics instead.
@@ -95,6 +105,13 @@ _RULES: list[tuple[Intent, re.Pattern]] = [
     (Intent.support, re.compile(r"\b(i was|i got|i'?ve been|money|amount)\b.{0,30}\b(charged|deducted|debited)\b", _I)),
     (Intent.support, re.compile(r"\b(want|need|get|request)\s+(a|my)\s+refund\b", _I)),
     (Intent.support, re.compile(r"\bpayment\b.{0,30}\b(failed|pending|declined|stuck|didn'?t go through)\b", _I)),
+    # assistant: open requests that need several tools (plan, combine); checked before the single-tool rules
+    (
+        Intent.assistant,
+        re.compile(r"\bwhat should i (study|learn|revise|focus on|work on) (today|next|now|this week)\b", _I),
+    ),
+    (Intent.assistant, re.compile(r"\b(study|revision) plan\b", _I)),
+    (Intent.assistant, re.compile(r"\bplan my (study|studies|revision|week|day)\b", _I)),
     # progress
     # "what are my weak topics" is progress; "quiz me on my weak topics" is practice (matched below)
     (Intent.progress, re.compile(r"^(?!.*\b(quiz|practi[cs]e|test me)).*\bweak\s+(topics?|areas?|spots?)\b", _I)),

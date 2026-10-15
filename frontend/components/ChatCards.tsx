@@ -1,9 +1,10 @@
 "use client";
 
-// Phase 4: the chat routes each message (course question, learning path, practice, progress, support).
-// These are the cards the agent sends next to its text answer, plus the "how it was routed" line.
+// Phase 4: the chat routes each message (course question, learning path, practice, progress, support,
+// or the tool-calling assistant). These are the cards the agent sends next to its text answer, the
+// "how it was routed" line, and (assistant only) the MCP tools it called.
 
-import { BookOpen, Check, CircleCheck, Dumbbell, Route as RouteIcon, Signpost, X } from "lucide-react";
+import { BookOpen, Check, CircleCheck, Dumbbell, Route as RouteIcon, Signpost, Wrench, X } from "lucide-react";
 import Link from "next/link";
 import { useState } from "react";
 
@@ -18,6 +19,8 @@ export type RouteInfo = {
   detail: { rule?: string; scores?: Record<string, number>; note?: string; error?: string };
   fallback?: string;
 };
+
+export type ToolStep = { name: string; args: Record<string, unknown>; ok: boolean; error?: string };
 
 type Where = { file_name: string; course_code: string | null; module_title: string | null; pages: number[]; section: string | null };
 type Step = {
@@ -56,6 +59,7 @@ const INTENT_LABEL: Record<string, string> = {
   practice: "Practice",
   progress: "Your progress",
   support: "Account / payment help",
+  assistant: "Study assistant",
 };
 const METHOD_LABEL: Record<string, string> = {
   rules: "matched a rule",
@@ -85,6 +89,29 @@ export function RouteLine({ route }: { route: RouteInfo }) {
       </span>
       {route.topic && <span>· topic “{route.topic}”</span>}
       {route.fallback && <span className="text-warn">· {route.fallback}</span>}
+    </div>
+  );
+}
+
+/** The MCP tools the assistant called, in order: "my weak topics ✓ · learning path (backprop) ✓". */
+export function ToolSteps({ steps }: { steps: ToolStep[] }) {
+  return (
+    <div className="mb-2 flex flex-wrap items-center gap-1.5 text-[11px] text-faint">
+      <Wrench className="h-3 w-3" />
+      <span>MCP tools:</span>
+      {steps.map((s, i) => {
+        const arg = Object.values(s.args).filter((v) => typeof v === "string" || typeof v === "number")[0];
+        return (
+          <span
+            key={i}
+            title={s.error ?? JSON.stringify(s.args)}
+            className={`rounded-md px-1.5 py-0.5 font-mono ${s.ok ? "bg-surface-2 text-muted" : "bg-bad-soft text-bad"}`}
+          >
+            {s.name}
+            {arg !== undefined && `(${String(arg).slice(0, 30)})`} {s.ok ? "✓" : "✗"}
+          </span>
+        );
+      })}
     </div>
   );
 }
