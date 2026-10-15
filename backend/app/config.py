@@ -106,6 +106,15 @@ class Settings(BaseSettings):
     quiz_max_questions: int = 10
     quiz_max_output_tokens: int = 3000
 
+    # --- Phase 4: routing, memory, practice ---
+    # Embedding router: accept the nearest intent only if it is this similar AND this far ahead of the next one
+    route_min_similarity: float = 0.45
+    route_min_margin: float = 0.04
+    route_max_output_tokens: int = 80
+    weak_topic_score: int = 65  # quiz average below this = weak topic
+    known_topic_score: int = 80  # quiz average at or above this = prerequisite marked "you know this"
+    practice_questions: int = 3
+
     # --- Langfuse (tracing) ---
     langfuse_public_key: str | None = None
     langfuse_secret_key: SecretStr | None = None

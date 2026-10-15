@@ -375,3 +375,56 @@ class Doubt(Base):
     hidden_at: Mapped[datetime | None] = mapped_column(
         DateTime(timezone=True), comment="Student removed it from their history (kept for anonymous analytics)"
     )
+    # Phase 4: every chat message is routed first; only "doubt" goes to RAG
+    intent: Mapped[str | None] = mapped_column(
+        String(20),
+        comment="doubt | learning_path | practice | progress | support (null = before Phase 4, i.e. doubt)",
+    )
+    route: Mapped[dict | None] = mapped_column(
+        JSON, comment="How the intent was decided: method (rules | embedding | llm), confidence, topic"
+    )
+
+
+# ---------------------------------------------------------------------------
+# Phase 4: what the assistant remembers about a student, and practice questions
+# ---------------------------------------------------------------------------
+
+
+class LearnerTopic(Base):
+    __tablename__ = "learner_topics"
+    __table_args__ = (
+        UniqueConstraint("student_id", "key", "kind"),
+        {
+            "comment": "Long-term memory: topics a student said they don't understand or practised. "
+            "Together with quiz scores, this is what the assistant knows the student finds hard."
+        },
+    )
+
+    id: Mapped[int] = mapped_column(primary_key=True)
+    student_id: Mapped[int] = mapped_column(ForeignKey("users.id"), index=True)
+    topic: Mapped[str] = mapped_column(String(120), comment="Display name, as the student or the graph named it")
+    key: Mapped[str] = mapped_column(String(120), comment="Normalised name, so 'Backprop' and 'backprop' match")
+    kind: Mapped[str] = mapped_column(
+        String(20), comment="asked_path (said they don't understand it) | practice_wrong | practice_right"
+    )
+    count: Mapped[int] = mapped_column(Integer, default=1)
+    last_at: Mapped[datetime] = mapped_column(DateTime(timezone=True))
+
+
+class PracticeSet(Base):
+    __tablename__ = "practice_sets"
+    __table_args__ = {
+        "comment": "AI-written practice questions for one student on one topic, created from the chat. "
+        "Not reviewed by a teacher (unlike quizzes): practice only, never graded for the record."
+    }
+
+    id: Mapped[int] = mapped_column(primary_key=True)
+    student_id: Mapped[int] = mapped_column(ForeignKey("users.id"), index=True)
+    course_id: Mapped[int] = mapped_column(ForeignKey("courses.id"))
+    topic: Mapped[str] = mapped_column(String(120))
+    questions: Mapped[list] = mapped_column(
+        JSON, comment="[{question, options, correct_index, explanation, source}]; answers never sent before answering"
+    )
+    answers: Mapped[dict] = mapped_column(JSON, default=dict, comment="{question index: chosen option index}")
+    cost_usd: Mapped[float] = mapped_column(Float, default=0.0)
+    created_at: Mapped[datetime] = mapped_column(DateTime(timezone=True), server_default=func.now())

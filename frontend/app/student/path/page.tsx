@@ -28,6 +28,8 @@ type Step = {
   needs: string[];
   materials: Where[];
   elsewhere: Where[];
+  known: boolean;
+  quiz_avg: number | null;
 };
 type Path = { target: { uid: string; name: string; course_code: string | null }; steps: Step[] };
 
@@ -47,11 +49,18 @@ function StepCard({ step, n }: { step: Step; n: number }) {
       >
         {n}
       </span>
-      <div className={`rounded-xl border p-3 ${step.is_target ? "border-brand" : "border-line"}`}>
+      <div
+        className={`rounded-xl border p-3 ${step.is_target ? "border-brand" : "border-line"} ${step.known ? "opacity-70" : ""}`}
+      >
         <div className="flex flex-wrap items-center gap-1.5">
           <span className="font-medium text-fg">{step.name}</span>
           {step.is_target && <Chip>your question</Chip>}
           {step.status === "draft" && <Chip>draft</Chip>}
+          {step.known && (
+            <span className="rounded-full bg-ok-soft px-2 py-0.5 text-xs font-medium text-ok">
+              you know this · quiz {step.quiz_avg}%
+            </span>
+          )}
           <Link href={ask} className="ml-auto inline-flex items-center gap-1 text-xs text-brand-ink hover:underline">
             <MessageCircleQuestion className="h-3.5 w-3.5" /> Ask about it
           </Link>
