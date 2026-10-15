@@ -5,11 +5,18 @@ graph databases, query rewriting and routing, agents, human-in-the-loop, evaluat
 guardrails and tracing.
 
 - What we're building and why: [PLAN.md](PLAN.md)
-- What you learn in each phase: [docs/](docs/) (start with [docs/phase-0.md](docs/phase-0.md); Phase 4: [docs/phase-4.md](docs/phase-4.md))
+- What you learn in each phase: [docs/](docs/) (start with [docs/phase-0.md](docs/phase-0.md); Phase 5: [docs/phase-5.md](docs/phase-5.md))
 - The planted "stories" in the dummy data: [data/seed_stories.md](data/seed_stories.md)
 - Interview prep per phase (approach, alternatives, cross-questions): [docs/interview/](docs/interview/)
 
-**Current phase: 4 (routing, agent and MCP), done.** **Ask a doubt** is one chat box for everything: each
+**Current phase: 5 (tickets and the feedback loop), done.** When the AI can't answer, isn't sure, gets a 👎,
+or the message is a login or payment problem, a **ticket** opens for the support team. Support sees what the
+AI saw and said, edits its draft and resolves; students read the answer under **My tickets**. A resolved
+course answer goes into a **knowledge base** that retrieval searches, so the next student who asks the same
+thing gets the verified answer from the AI. Teachers get **Doubt insights**: the most asked questions and the
+questions the material can't answer, grouped by meaning.
+
+**Phase 4 (routing, agent and MCP):** **Ask a doubt** is one chat box for everything: each
 message is routed (rules first, then nearest example embeddings, then a small LLM classifier) to a course
 answer, a learning path (*"I don't understand backprop"*), practice questions (*"Quiz me on joins"*), your
 progress (*"What are my weak topics?"*), account help (*"I forgot my password"*) or, for open requests
@@ -28,6 +35,10 @@ a "Show details" panel that shows how each answer was found. Every step is measu
 `uv run python -m app.evals.retrieval --compare`.
 Phase 1 gave us the upload pipeline and basic RAG; Phase 0 the dummy login, portals, seed data and a safe
 LLM gateway (retries, circuit breaker, daily budget, Langfuse).
+
+**Upgrading from Phase 4?** Pull and start the backend once: it adds the `tickets` and `faq_entries`
+tables and the new `doubts` columns. No new packages. Optionally, from `backend/`, run
+`uv run python -m app.tickets.backfill` to open tickets for questions asked before Phase 5.
 
 **Upgrading from Phase 3?** Pull, then `uv sync` (from `backend/`; adds the MCP SDK and
 `langchain-mcp-adapters`) and start the backend once: it adds the new tables.
@@ -114,7 +125,7 @@ Admin UIs: Qdrant <http://localhost:6333/dashboard>, Neo4j <http://localhost:747
 ```powershell
 cd backend
 uv sync                                  # creates .venv and installs everything
-uv run pytest                            # 136 tests; 5 use Neo4j and are skipped when it isn't running
+uv run pytest                            # 162 tests; 5 use Neo4j and are skipped when it isn't running
 uv run python -m app.seed --reset        # create tables + load dummy data
 uv run python -m app.ingest.load_samples # index the 24 sample files + extract their concepts (~$0.05)
 uv run uvicorn app.main:app --reload --port 8000
@@ -192,8 +203,20 @@ Open <http://localhost:3000>.
     `http://localhost:8000/mcp` (Streamable HTTP) with the header `Authorization: Bearer <token>` and call
     `get_learning_path`. Then call `list_students`: refused, because Riya is a student.
 
+**Phase 5:**
+
+32. As **Riya**, ask *"What is gradient clipping?"*: no course material covers it, and the line under the
+    answer says a support person will answer it (ticket number). Press 👎 on any other answer: another ticket.
+33. As **Rohan Das** (support), open **Ticket queue** and the gradient clipping ticket: the question, the
+    passages the AI read, its answer and Riya's enrollments. Write an answer, keep **Save to knowledge base**
+    ticked with course DL301, and **Resolve**.
+34. As **Riya**, open **My tickets** to read it. Then ask *"what's gradient clipping"* in a new chat: source
+    [1] is *Support answer (verified)* and the confidence is high.
+35. As **Suresh Rao**, open **Doubt insights**: most asked questions and content gaps, grouped by meaning.
+
 Then work through the experiments in [docs/phase-0.md](docs/phase-0.md), [docs/phase-1.md](docs/phase-1.md),
-[docs/phase-2.md](docs/phase-2.md), [docs/phase-3.md](docs/phase-3.md) and [docs/phase-4.md](docs/phase-4.md).
+[docs/phase-2.md](docs/phase-2.md), [docs/phase-3.md](docs/phase-3.md), [docs/phase-4.md](docs/phase-4.md)
+and [docs/phase-5.md](docs/phase-5.md).
 
 ---
 

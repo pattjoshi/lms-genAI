@@ -47,7 +47,12 @@ def calls(monkeypatch):
     monkeypatch.setattr(retriever, "embed_texts", embed_and_remember)
     monkeypatch.setattr(retriever.vectorstore, "search", search)
     monkeypatch.setattr(retriever.reranker, "score", score)
+    monkeypatch.setattr(retriever, "faq_search", no_faq)
     return log
+
+
+async def no_faq(_session, _vec, _course_ids):
+    return []
 
 
 def _rewrite_to(text):

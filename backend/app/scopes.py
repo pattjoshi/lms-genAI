@@ -27,7 +27,7 @@ def student_list_query(user: User) -> Select[tuple[User]]:
         raise PermissionDenied("Students can't list other students. You can only see your own profile and scores.")
     if scope == Scope.TICKET_STUDENT:
         raise PermissionDenied(
-            "Support staff can only see the student attached to a ticket (tickets arrive in Phase 5)."
+            "Support staff can only see the student attached to an open ticket. Open the ticket to see them."
         )
     raise PermissionDenied("You don't have access to student records.")
 

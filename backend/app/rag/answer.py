@@ -16,7 +16,10 @@ from app.rag.retriever import Retrieval, retrieve
 
 def confidence(relevance: dict) -> str:
     """S7: how sure the answer is, from how far the best source cleared the relevance threshold.
-    A score just above the threshold means the AI got material that is only loosely related."""
+    A score just above the threshold means the AI got material that is only loosely related.
+    Phase 5: an answer support already verified for this question counts as high."""
+    if relevance.get("faq"):
+        return "high"
     best, threshold = relevance.get("best"), relevance.get("threshold") or 0
     if best is None:
         return "low"

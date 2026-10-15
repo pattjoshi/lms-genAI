@@ -26,6 +26,7 @@ from app.models import (
     Topic,
     User,
 )
+from app.tickets import service as tickets_svc
 
 router = APIRouter(prefix="/portal", tags=["portal"])
 
@@ -153,6 +154,6 @@ async def admin_summary(session: SessionDep, user: User = Depends(require_roles(
 
 
 @router.get("/support/summary")
-async def support_summary(user: User = Depends(require_roles(Role.support))):
-    # Support only sees a student's data through a ticket, and tickets arrive in Phase 5.
-    return {"tickets": [], "note": "The ticket queue arrives in Phase 5."}
+async def support_summary(session: SessionDep, user: User = Depends(require_roles(Role.support))):
+    # Counts only: support sees a student's data through a ticket (GET /tickets/{id}), never in bulk.
+    return await tickets_svc.summary(session)

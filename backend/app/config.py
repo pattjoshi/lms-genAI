@@ -120,6 +120,13 @@ class Settings(BaseSettings):
     mcp_agent_max_steps: int = 4  # LLM calls the chat's tool-calling assistant may make for one message
     mcp_notes_dir: str | None = None  # a folder of your own notes, read through an external MCP server (dev only)
 
+    # --- Tickets and knowledge base (Phase 5) ---
+    faq_min_similarity: float = 0.80  # a support answer is used for a new question at least this similar (cosine)
+    similar_ticket_min: float = 0.75  # "similar past tickets" shown to support at least this similar
+    insights_group_similarity: float = 0.80  # teacher insights: questions this similar count as the same question
+    ticket_on_no_answer: bool = True  # open a ticket when the course material has no answer (not only low confidence)
+    insights_days: int = 30  # teacher insights look at this many days of questions
+
     # --- Langfuse (tracing) ---
     langfuse_public_key: str | None = None
     langfuse_secret_key: SecretStr | None = None

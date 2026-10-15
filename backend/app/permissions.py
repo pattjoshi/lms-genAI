@@ -25,7 +25,7 @@ class Scope(StrEnum):
     OWN = "own"  # only rows about the user themself
     ENROLLED = "enrolled"  # only courses the student is enrolled in
     OWN_COURSES = "own_courses"  # only courses the teacher owns (and their students)
-    TICKET_STUDENT = "ticket_student"  # only the student attached to an open ticket (Phase 5)
+    TICKET_STUDENT = "ticket_student"  # only the student attached to an open ticket (app/tickets)
     ALL = "all"
 
 

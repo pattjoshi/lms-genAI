@@ -46,6 +46,11 @@ UPGRADES = [
     # Phase 4a: chat routing (new tables learner_topics and practice_sets are created by create_all)
     "ALTER TABLE doubts ADD COLUMN IF NOT EXISTS intent VARCHAR(20)",
     "ALTER TABLE doubts ADD COLUMN IF NOT EXISTS route JSON",
+    # Phase 5: feedback loop (new tables tickets and faq_entries are created by create_all)
+    "ALTER TABLE doubts ADD COLUMN IF NOT EXISTS confidence VARCHAR(10)",
+    "ALTER TABLE doubts ADD COLUMN IF NOT EXISTS feedback INTEGER",
+    "ALTER TABLE doubts ADD COLUMN IF NOT EXISTS feedback_comment TEXT",
+    "ALTER TABLE doubts ADD COLUMN IF NOT EXISTS question_vec JSON",
 ]
 
 

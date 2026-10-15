@@ -2,7 +2,7 @@
 
 The reply is a template filled with facts (the last failed logins, the last payments), so it can't
 invent a refund policy or promise something support won't do. Every support message is saved with
-intent "support"; Phase 5 turns them into tickets for the support team.
+intent "support" and opens a ticket for the support team (Phase 5, app/tickets).
 """
 
 from datetime import UTC, datetime, timedelta
@@ -105,5 +105,5 @@ async def answer(session: AsyncSession, user: User, text: str) -> tuple[str, dic
         ).all()
         reply, facts = payment_reply([(p, c) for p, c in rows], now)
         kind = "payment"
-    reply += "\n\nI've saved this message for the support team. (The ticket queue they work from arrives in Phase 5.)"
+    reply += "\n\nI've opened a ticket for the support team. Their answer will appear under My tickets."
     return reply, {"kind": kind, **facts}

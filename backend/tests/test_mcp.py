@@ -42,6 +42,8 @@ async def test_tools_and_their_annotations():
         "practice_questions",
         "check_practice_answer",
         "list_students",
+        "my_tickets",
+        "create_ticket",
     }
     assert tools["search_course_material"].annotations.readOnlyHint
     assert not tools["practice_questions"].annotations.readOnlyHint

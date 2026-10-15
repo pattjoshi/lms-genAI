@@ -42,8 +42,8 @@ a pause so you can understand it before the next one.
 | 1 ✅ | **Upload pipeline + basic RAG** | Parsing (keeping page numbers), chunking strategies, overlap, embeddings, cosine similarity, vector DB payloads, top-k, grounded prompts, streaming (SSE). Generated course files; start the 20-question eval set | A student gets a correct streamed answer from an uploaded PDF |
 | 2 ✅ | **Better retrieval** | Metadata filtering, query rewriting, hybrid search (dense + sparse, RRF), reranking, citations, relevance grading + corrective retry. Measure recall@k / MRR before & after | Answers cite file + page; students only see enrolled courses; numbers show the gain |
 | 3 ✅ | **Concept graph + learning paths** | Structured extraction (JSON schema + validation), entity dedup, graph modelling, Cypher traversal, GraphRAG-lite, quiz generation, human approval | "I don't understand X" returns a sensible study order from approved concepts |
-| 4 | **Routing + agent + MCP** | Intent routing (rules vs embeddings vs LLM), tool calling, LangGraph state machine, short/long-term memory, confidence scoring. **MCP:** tools / resources / prompts, stdio vs Streamable HTTP, token auth, tool annotations, MCP security (tool poisoning, prompt injection in tool results, confused deputy). Our LMS is an MCP **server**; our agent is an MCP **client** of it | Each question goes to the right tool; decisions visible in traces; MCP Inspector and Claude Desktop can call our tools, and a student's token is refused for staff-only tools |
-| 5 | **Tickets + feedback loop** | Human in the loop, context packaging, knowledge feedback, clustering questions with embeddings | A resolved ticket's answer is used by the AI next time |
+| 4 ✅ | **Routing + agent + MCP** | Intent routing (rules vs embeddings vs LLM), tool calling, LangGraph state machine, short/long-term memory, confidence scoring. **MCP:** tools / resources / prompts, stdio vs Streamable HTTP, token auth, tool annotations, MCP security (tool poisoning, prompt injection in tool results, confused deputy). Our LMS is an MCP **server**; our agent is an MCP **client** of it | Each question goes to the right tool; decisions visible in traces; MCP Inspector and Claude Desktop can call our tools, and a student's token is refused for staff-only tools |
+| 5 ✅ | **Tickets + feedback loop** | Human in the loop, context packaging, knowledge feedback, clustering questions with embeddings | A resolved ticket's answer is used by the AI next time |
 | 6 | **SQL agent (all roles, scoped)** | Schema-aware prompting, few-shot, self-correction loop, SELECT-only validation, read-only DB user, row-level security, chart choice | Plain English → SQL → answer + chart; can't write; can't escape scope |
 | 7 | **Evaluation, guardrails, tracing** | RAG metrics (context precision/recall, faithfulness, relevance), LLM-as-judge and its biases, injection & off-topic guardrails, cost/latency dashboards | One command runs the eval and shows better/worse |
 
@@ -77,6 +77,17 @@ no LLM (S18; tickets in Phase 5) and answer confidence (S7). **4b (done):** the 
 every call, an MCP access page per portal) and the chat's `assistant` intent: a bounded tool-calling loop
 whose tools come from our own server through `langchain-mcp-adapters`, plus the optional filesystem server
 for a notes folder (M12, dev only). `list_students` also covers T16 (struggling students, by quiz average).
+
+**Phase 5 note (done, one part):** tickets open automatically when the material has no answer, the answer
+has low confidence, the student presses 👎, or it is a login/payment message (P2, S6, S18), one ticket per
+message. Support gets the full context (P3), sees the student's records only while the ticket is open (P8),
+similar resolved tickets (P7), and resolves from the AI's draft (P4). A resolved course answer goes into the
+knowledge base unless unticked (P5, P6; account answers never do), and retrieval puts a near-paraphrase match
+in front as a verified source. Students see their tickets (S19); teachers see most asked doubts and content
+gaps grouped by meaning (T13, T14); MCP gets `my_tickets` and `create_ticket` (with a confirm step).
+**Deviation:** the "FAQ collection" and the question vectors live in Postgres (JSON columns, compared in
+Python), not in a Qdrant collection: a few thousand vectors don't need an index, and resolving a ticket and
+adding its knowledge-base entry stay in one transaction. Move to pgvector or Qdrant at ~50k vectors.
 
 **Phase 4 note (MCP):** every LMS capability is written **once**, as a tool on our MCP server.
 External MCP clients (Claude Desktop, Cursor, VS Code, MCP Inspector) call it over Streamable HTTP or
@@ -146,7 +157,7 @@ text layer) are rejected with an OCR hint. Both are deliberate scope limits.
 | P2 ⭐ | Auto tickets: low confidence, 👎, non-academic | 5 |
 | P3 ⭐ | Full context: question, rewritten query, chunks, AI draft, confidence, student & course | 5 |
 | P4 ⭐ | Edit draft and resolve | 5 |
-| P5 ⭐ | Resolved answer → knowledge base (FAQ collection) | 5 |
+| P5 ⭐ | Resolved answer → knowledge base (FAQ entries, searched by retrieval) | 5 |
 | P6 | "Don't save to KB" for private/one-off issues | 5 |
 | P7 | Similar past tickets | 5 |
 | P8 | Data scope: only the ticket's student | 0 / 6 |

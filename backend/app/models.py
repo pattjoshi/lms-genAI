@@ -383,6 +383,13 @@ class Doubt(Base):
     route: Mapped[dict | None] = mapped_column(
         JSON, comment="How the intent was decided: method (rules | embedding | llm), confidence, topic"
     )
+    # Phase 5: the feedback loop
+    confidence: Mapped[str | None] = mapped_column(String(10), comment="high | medium | low (course answers only)")
+    feedback: Mapped[int | None] = mapped_column(Integer, comment="1 = thumbs up, -1 = thumbs down")
+    feedback_comment: Mapped[str | None] = mapped_column(Text)
+    question_vec: Mapped[list | None] = mapped_column(
+        JSON, comment="Embedding of the question, filled when needed (teacher insights: grouping by meaning)"
+    )
 
 
 # ---------------------------------------------------------------------------
@@ -466,3 +473,53 @@ class McpCall(Base):
     status: Mapped[str] = mapped_column(String(20), comment="ok | error | refused | rate_limited")
     error: Mapped[str | None] = mapped_column(String(300))
     latency_ms: Mapped[int] = mapped_column(Integer, default=0)
+
+
+# ---------------------------------------------------------------------------
+# Phase 5: support tickets and the knowledge base
+# ---------------------------------------------------------------------------
+
+
+class Ticket(Base):
+    __tablename__ = "tickets"
+    __table_args__ = {
+        "comment": "A question a person must look at: the AI couldn't answer, wasn't sure, got a thumbs down, or it "
+        "is a login/payment problem. Support resolves it; a resolved academic answer can go into the knowledge base."
+    }
+
+    id: Mapped[int] = mapped_column(primary_key=True)
+    student_id: Mapped[int] = mapped_column(ForeignKey("users.id"), index=True)
+    doubt_id: Mapped[int | None] = mapped_column(ForeignKey("doubts.id"), unique=True, comment="The chat message")
+    course_id: Mapped[int | None] = mapped_column(ForeignKey("courses.id"), comment="Best guess, from the sources")
+    reason: Mapped[str] = mapped_column(
+        String(20), comment="no_answer | low_confidence | thumbs_down | support | student (opened by the student)"
+    )
+    category: Mapped[str] = mapped_column(String(20), comment="academic | login | payment")
+    subject: Mapped[str] = mapped_column(Text, comment="The student's question or message")
+    draft: Mapped[str | None] = mapped_column(Text, comment="What the AI answered, as a starting point for support")
+    status: Mapped[str] = mapped_column(String(20), default="open", index=True, comment="open | in_progress | resolved")
+    assigned_to: Mapped[int | None] = mapped_column(ForeignKey("users.id"))
+    resolution: Mapped[str | None] = mapped_column(Text, comment="The answer the student sees")
+    resolved_by: Mapped[int | None] = mapped_column(ForeignKey("users.id"))
+    resolved_at: Mapped[datetime | None] = mapped_column(DateTime(timezone=True))
+    saved_to_kb: Mapped[bool] = mapped_column(Boolean, default=False)
+    question_vec: Mapped[list | None] = mapped_column(JSON, comment="Embedding of the subject (similar tickets)")
+    created_at: Mapped[datetime] = mapped_column(DateTime(timezone=True), server_default=func.now(), index=True)
+
+
+class FaqEntry(Base):
+    __tablename__ = "faq_entries"
+    __table_args__ = {
+        "comment": "Knowledge base: answers written by support (from resolved tickets). Retrieval searches them "
+        "next to course material, so the AI uses a resolved answer the next time someone asks."
+    }
+
+    id: Mapped[int] = mapped_column(primary_key=True)
+    course_id: Mapped[int] = mapped_column(ForeignKey("courses.id"), index=True)
+    question: Mapped[str] = mapped_column(Text)
+    answer: Mapped[str] = mapped_column(Text)
+    question_vec: Mapped[list] = mapped_column(JSON, comment="Embedding of the question")
+    ticket_id: Mapped[int | None] = mapped_column(ForeignKey("tickets.id"))
+    created_by: Mapped[int] = mapped_column(ForeignKey("users.id"))
+    created_at: Mapped[datetime] = mapped_column(DateTime(timezone=True), server_default=func.now())
+    active: Mapped[bool] = mapped_column(Boolean, default=True, comment="Support can withdraw an entry")
