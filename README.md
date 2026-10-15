@@ -5,18 +5,21 @@ graph databases, query rewriting and routing, agents, human-in-the-loop, evaluat
 guardrails and tracing.
 
 - What we're building and why: [PLAN.md](PLAN.md)
-- What you learn in each phase: [docs/](docs/) (start with [docs/phase-0.md](docs/phase-0.md); Phase 3: [docs/phase-3.md](docs/phase-3.md))
+- What you learn in each phase: [docs/](docs/) (start with [docs/phase-0.md](docs/phase-0.md); Phase 4: [docs/phase-4.md](docs/phase-4.md))
 - The planted "stories" in the dummy data: [data/seed_stories.md](data/seed_stories.md)
 - Interview prep per phase (approach, alternatives, cross-questions): [docs/interview/](docs/interview/)
 
-**Current phase: 3 (concept graph and quizzes), done.** After a file is indexed, an LLM extracts its key
-concepts and prerequisites with structured output, every concept is checked against a quote from the file,
-duplicates are merged across files, and the result goes into Neo4j as **drafts**. Teachers review them on the
-**Concept graph** page (approve, edit, merge, reject, fix prerequisites); students type *"I don't understand
-X"* on **Learning path** and get a study order of approved concepts, each linked to its file and page.
-Teachers also generate **quizzes** from a file or topic: every question is checked against a quote from
-its source passage, and the teacher approves each one before publishing. Measured with
-`uv run python -m app.evals.concepts`. Phase 4 (routing, agent, MCP) comes next.
+**Current phase: 4a (routing and agent), done.** **Ask a doubt** is now one chat box for everything: each
+message is routed (rules first, then nearest example embeddings, then a small LLM classifier) to a course
+answer, a learning path (*"I don't understand backprop"*), practice questions (*"Quiz me on joins"*), your
+progress (*"What are my weak topics?"*) or account help (*"I forgot my password"*). A LangGraph agent runs
+the branch, and the route line above each answer shows how it was decided. The assistant remembers weak
+topics (quiz scores plus what you asked and practised), learning paths mark steps you already know, and
+answers show a confidence level with a "Not sure" warning. Phase 4b (our LMS as an MCP server) comes next.
+
+**Phase 3 (concept graph and quizzes):** an LLM extracts concepts and prerequisites from each file into
+Neo4j as drafts, teachers review them, and students get learning paths of approved concepts. Teachers
+generate quizzes whose questions are checked against their source passage and approved before publishing.
 
 **Phase 2 (better retrieval):** hybrid search (meaning + BM25 keywords, fused with RRF), a local
 cross-encoder reranker, follow-up questions (query rewriting), a corrective retry, "Search in" filters, and
@@ -107,7 +110,7 @@ Admin UIs: Qdrant <http://localhost:6333/dashboard>, Neo4j <http://localhost:747
 ```powershell
 cd backend
 uv sync                                  # creates .venv and installs everything
-uv run pytest                            # 97 tests; 5 use Neo4j and are skipped when it isn't running
+uv run pytest                            # 122 tests; 5 use Neo4j and are skipped when it isn't running
 uv run python -m app.seed --reset        # create tables + load dummy data
 uv run python -m app.ingest.load_samples # index the 24 sample files + extract their concepts (~$0.05)
 uv run uvicorn app.main:app --reload --port 8000
@@ -174,8 +177,15 @@ Open <http://localhost:3000>.
 26. As **Riya**, open **Quizzes**, take it, and submit with one wrong answer: each result shows the
     explanation and the file and page to read.
 
+**Phase 4:**
+
+27. As **Riya**, open **Ask a doubt** and ask *"I don't understand backprop"*: the route line says
+    "Learning path · matched a rule", and the path marks the steps her quiz scores show she knows.
+28. Ask *"Quiz me on backpropagation"*, answer the questions, then ask *"What are my weak topics?"*.
+29. As **Karan Verma**, ask *"I can't log in"*: the answer lists Karan's own failed logins, with no LLM call.
+
 Then work through the experiments in [docs/phase-0.md](docs/phase-0.md), [docs/phase-1.md](docs/phase-1.md),
-[docs/phase-2.md](docs/phase-2.md) and [docs/phase-3.md](docs/phase-3.md).
+[docs/phase-2.md](docs/phase-2.md), [docs/phase-3.md](docs/phase-3.md) and [docs/phase-4.md](docs/phase-4.md).
 
 ---
 

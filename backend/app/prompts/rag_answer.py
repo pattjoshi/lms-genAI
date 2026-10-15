@@ -44,3 +44,10 @@ def format_excerpt(number: int, source: dict) -> str:
     where = f"page {source['page']}" if source.get("page") else (source.get("section") or "")
     header = " · ".join(x for x in [source.get("course_code"), source.get("file_name"), where] if x)
     return f"[{number}] ({header})\n{source['text']}"
+
+
+# Phase 4 (S12): what the assistant remembers about the student, added to the system message.
+# Only names of topics, never quiz rows: the model needs the hint, not the data.
+RAG_MEMORY = """
+
+The student has found these topics hard before: {topics}. If your answer relies on one of them, explain that part simply and in a little more detail. Don't mention this list."""

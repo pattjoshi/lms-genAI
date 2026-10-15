@@ -67,6 +67,13 @@ is left as an extra. **3c (done):** quizzes (T10, T11, S15): one structured-outp
 spread over a file or topic, each question checked against a quote from its passage, options shuffled in
 code (answer-position bias), every question approved by the teacher before publishing, graded on the server.
 
+**Phase 4 note:** built in two parts. **4a (done):** intent routing (rules → nearest example embeddings
+with a margin → LLM classifier, "doubt" as the safe default), a LangGraph agent with one node per intent
+and a learning-path → doubt fallback edge, long-term memory as facts (quiz averages + `learner_topics`), known
+prerequisites marked from quiz scores (S11), weak topics in the RAG prompt (S12), practice questions with the
+quiz checks, graded on the server (S13, S14), login and payment answers from the student's own records with
+no LLM (S18; tickets in Phase 5) and answer confidence (S7). **4b (next):** the MCP server and client below.
+
 **Phase 4 note (MCP):** every LMS capability is written **once**, as a tool on our MCP server.
 External MCP clients (Claude Desktop, Cursor, VS Code, MCP Inspector) call it over Streamable HTTP or
 stdio, and our own LangGraph agent calls the same tools as an MCP client, so the agent and outside apps

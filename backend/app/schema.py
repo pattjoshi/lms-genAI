@@ -43,6 +43,9 @@ UPGRADES = [
     """UPDATE quizzes q SET course_id = m.course_id FROM topics t JOIN modules m ON m.id = t.module_id
        WHERE q.course_id IS NULL AND q.topic_id = t.id""",
     "ALTER TABLE quiz_attempts ADD COLUMN IF NOT EXISTS answers JSON",
+    # Phase 4a: chat routing (new tables learner_topics and practice_sets are created by create_all)
+    "ALTER TABLE doubts ADD COLUMN IF NOT EXISTS intent VARCHAR(20)",
+    "ALTER TABLE doubts ADD COLUMN IF NOT EXISTS route JSON",
 ]
 
 

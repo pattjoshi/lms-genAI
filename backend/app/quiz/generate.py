@@ -211,7 +211,7 @@ def main_topic(questions: list[CheckedQuestion]) -> str | None:
 # ---------------------------------------------------------------------------
 
 
-async def _passages_for(session: AsyncSession, course: Course, document: Document | None, topic: Topic | None):
+async def passages_for(session: AsyncSession, course: Course, document: Document | None, topic: Topic | None):
     query = (
         select(Chunk, Document)
         .join(Document, Document.id == Chunk.document_id)
@@ -243,6 +243,43 @@ async def _passages_for(session: AsyncSession, course: Course, document: Documen
     ]
 
 
+async def draft_questions(
+    session: AsyncSession,
+    *,
+    course: Course,
+    user: User,
+    passages: list[Passage],
+    about: str,
+    n: int,
+    feature: str,
+) -> tuple[list[CheckedQuestion], list[str], float]:
+    """Passages -> checked questions. Shared by teacher quizzes and student practice (Phase 4).
+    Returns (questions, reasons questions were dropped, cost in USD)."""
+    s = get_settings()
+    passages = pick_passages(passages, s.quiz_max_passages)
+    for p in passages:
+        p.text = p.text[: s.quiz_passage_chars]
+    with trace("generate_quiz", user, feature, input={"about": about, "questions": n}) as root:
+        messages = [
+            SystemMessage(QUIZ_SYSTEM.format(n=n)),
+            HumanMessage(
+                QUIZ_USER.format(course=course.title, about=about, passages=format_passages([p.text for p in passages]))
+            ),
+        ]
+        draft, result = await chat_structured(
+            session,
+            messages=messages,
+            schema=QuizDraft,
+            feature=feature,
+            user=user,
+            max_tokens=s.quiz_max_output_tokens,
+        )
+        questions, dropped = check_questions(draft, passages, n)
+        root.update(output={"kept": len(questions), "dropped": dropped, "cost_usd": result.cost_usd})
+    log.info("Questions for %s: %d kept, dropped %s", about, len(questions), dropped)
+    return questions, dropped, result.cost_usd
+
+
 async def generate_quiz(
     session: AsyncSession,
     *,
@@ -258,31 +295,12 @@ async def generate_quiz(
     num_questions = max(1, min(num_questions, s.quiz_max_questions))
     about = f"file: {document.file_name}" if document else f"topic: {topic.name}" if topic else "the course"
 
-    passages = await _passages_for(session, course, document, topic)
+    passages = await passages_for(session, course, document, topic)
     if not passages:
         raise QuizError(f"No indexed course text for {about}. Upload a file or wait until it is ready.")
-    passages = pick_passages(passages, s.quiz_max_passages)
-    for p in passages:
-        p.text = p.text[: s.quiz_passage_chars]
-
-    with trace("generate_quiz", user, "quizzes", input={"about": about, "questions": num_questions}) as root:
-        messages = [
-            SystemMessage(QUIZ_SYSTEM.format(n=num_questions)),
-            HumanMessage(
-                QUIZ_USER.format(course=course.title, about=about, passages=format_passages([p.text for p in passages]))
-            ),
-        ]
-        draft, result = await chat_structured(
-            session,
-            messages=messages,
-            schema=QuizDraft,
-            feature="quiz_generate",
-            user=user,
-            max_tokens=s.quiz_max_output_tokens,
-        )
-        questions, dropped = check_questions(draft, passages, num_questions)
-        root.update(output={"kept": len(questions), "dropped": dropped, "cost_usd": result.cost_usd})
-    log.info("Quiz for %s: %d kept, dropped %s", about, len(questions), dropped)
+    questions, dropped, cost = await draft_questions(
+        session, course=course, user=user, passages=passages, about=about, n=num_questions, feature="quiz_generate"
+    )
     if not questions:
         raise QuizError("None of the AI's questions could be checked against your material. Try again.")
 
@@ -306,7 +324,7 @@ async def generate_quiz(
         status="draft",
         created_by=user.id,
         created_at=datetime.now(UTC),
-        generation_cost_usd=round(result.cost_usd, 6),
+        generation_cost_usd=round(cost, 6),
     )
     session.add(quiz)
     await session.flush()

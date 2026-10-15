@@ -1,7 +1,12 @@
-"""POST /chat/ask — answer a doubt from the course material, streamed (Server-Sent Events).
+"""POST /chat/ask — every chat message, streamed (Server-Sent Events).
+
+Phase 4: the message first goes through the agent graph (app/agent/graph.py), which routes it to a
+course answer, a learning path, practice questions, progress or support.
 
 Event sequence sent to the browser:
-    sources  -> the retrieved chunks (citation cards) + how they were found (details panel)
+    route    -> which intent was chosen, by which method (rules / embedding / llm), how sure
+    sources  -> doubts only: the retrieved chunks (citation cards) + how they were found (details panel)
+    card     -> other intents: structured content (path steps, practice questions, weak topics...)
     token    -> one piece of the answer text (many of these)
     done     -> tokens, cost, latency, status
     error    -> something failed (sent instead of / after some tokens)
@@ -16,27 +21,26 @@ fake history.
 """
 
 import json
+import logging
 import time
 from datetime import UTC, datetime
 
 from fastapi import APIRouter, HTTPException
 from fastapi.responses import StreamingResponse
-from langchain_core.messages import HumanMessage, SystemMessage
 from pydantic import BaseModel, Field
 from sqlalchemy import select, update
 
+from app.agent.graph import agent, previous_turns
 from app.auth import CurrentUser, SessionDep
 from app.config import get_settings
 from app.db import SessionLocal
 from app.llm.errors import LLMError
-from app.llm.service import StreamStats, chat_stream
 from app.llm.tracing import trace
 from app.models import Course, Doubt, Module, User
-from app.prompts.rag_answer import NO_ANSWER, RAG_SYSTEM, RAG_USER, RAG_USER_REWRITTEN, format_excerpt
-from app.rag.retriever import retrieve
 from app.rag.vectorstore import IndexOutdated
 from app.scopes import readable_course_ids
 
+log = logging.getLogger(__name__)
 router = APIRouter(prefix="/chat", tags=["chat"])
 
 
@@ -64,121 +68,62 @@ async def ask(body: AskIn, user: CurrentUser):
     )
 
 
-async def _history(session, user: User, conversation_id: str | None) -> list[tuple[str, str]]:
-    """Previous turns of this conversation, oldest first: [(question, answer), ...]."""
-    if not conversation_id:
-        return []
-    rows = (
-        await session.scalars(
-            select(Doubt)
-            .where(
-                Doubt.student_id == user.id,
-                Doubt.conversation_id == conversation_id,
-                Doubt.hidden_at.is_(None),
-                Doubt.status.in_(["answered", "no_context"]),
-            )
-            .order_by(Doubt.id.desc())
-            .limit(get_settings().rag_history_turns)
-        )
-    ).all()
-    return [(d.question, d.answer or "") for d in reversed(rows)]
-
-
 async def _answer_stream(user_id: int, question: str, body: AskIn):
+    """Runs the agent graph (app/agent/graph.py) and turns what its nodes emit into SSE events."""
     s = get_settings()
     started = time.perf_counter()
     async with SessionLocal() as session:
         user = await session.get(User, user_id)
         doubt = Doubt(student_id=user.id, question=question, status="error", conversation_id=body.conversation_id)
-        answer, stats = "", StreamStats()
-        retrieval = None
+        state: dict = {}
         try:
-            with trace(
-                "rag_answer", user, "doubt", input={"question": question}, session_id=body.conversation_id
-            ) as root:
-                # 1. Retrieve (rewrite -> hybrid search -> rerank -> corrective retry, see retriever.py)
-                history = await _history(session, user, body.conversation_id)
-                retrieval = await retrieve(
-                    session,
-                    user,
-                    question,
-                    course_ids=[body.course_id] if body.course_id else None,
-                    module_id=body.module_id,
-                    history=history,
-                )
-                doubt.sources = [{k: v for k, v in x.items() if k != "text"} for x in retrieval.sources]
-                doubt.top_score = retrieval.top_score
-                doubt.top_rerank_score = retrieval.top_rerank_score
-                searched = retrieval.retried_with or retrieval.query
-                doubt.search_query = searched if searched != question else None
-                yield sse(
-                    "sources",
-                    {
-                        "sources": retrieval.sources,
-                        "min_score": s.rag_min_score,
-                        "min_rerank_score": s.rag_min_rerank_score,
-                        "retrieval": retrieval.details(),
-                    },
-                )
-
-                used = [x for x in retrieval.sources if x["used"]]
-                if not used:
-                    # 2a. Nothing relevant: don't call the LLM at all (saves cost, prevents guessing).
-                    answer, doubt.status = NO_ANSWER, "no_context"
-                    yield sse("token", {"text": answer})
-                else:
-                    # 2b. Generate a grounded answer, streamed token by token
-                    excerpts = "\n\n".join(format_excerpt(i, x) for i, x in enumerate(used, start=1))
-                    if retrieval.rewritten:
-                        prompt = RAG_USER_REWRITTEN.format(
-                            excerpts=excerpts, question=retrieval.query, original=question
-                        )
+            with trace("chat", user, "doubt", input={"question": question}, session_id=body.conversation_id) as root:
+                inputs = {
+                    "session": session,
+                    "user": user,
+                    "question": question,
+                    "conversation_id": body.conversation_id,
+                    "course_id": body.course_id,
+                    "module_id": body.module_id,
+                    "history": await previous_turns(session, user, body.conversation_id, s.rag_history_turns),
+                    "doubt": doubt,
+                }
+                async for mode, chunk in agent.astream(inputs, stream_mode=["custom", "values"]):
+                    if mode == "custom":
+                        event, data = chunk
+                        yield sse(event, data)
                     else:
-                        prompt = RAG_USER.format(excerpts=excerpts, question=question)
-                    messages = [
-                        SystemMessage(RAG_SYSTEM.format(role=user.role.value, name=user.full_name)),
-                        HumanMessage(prompt),
-                    ]
-                    async for piece in chat_stream(
-                        session,
-                        messages=messages,
-                        feature="rag_answer",
-                        user=user,
-                        stats=stats,
-                        max_tokens=s.rag_max_output_tokens,
-                    ):
-                        answer += piece
-                        yield sse("token", {"text": piece})
-                    doubt.status = "no_context" if answer.strip().startswith(NO_ANSWER) else "answered"
-                root.update(output={"answer": answer, "status": doubt.status})
+                        state = chunk  # the latest full state; the last one is the final state
+                root.update(output={"intent": doubt.intent, "answer": doubt.answer, "status": doubt.status})
 
-            total_cost = stats.cost_usd + retrieval.cost_usd
-            doubt.answer, doubt.cost_usd = answer, total_cost
-            doubt.input_tokens = stats.input_tokens + retrieval.llm_input_tokens
-            doubt.output_tokens = stats.output_tokens + retrieval.llm_output_tokens
+            usage = state.get("usage") or {}
+            doubt.cost_usd = usage.get("cost_usd", 0.0)
+            doubt.input_tokens = usage.get("input_tokens", 0)
+            doubt.output_tokens = usage.get("output_tokens", 0)
             doubt.latency_ms = int((time.perf_counter() - started) * 1000)
             yield sse(
                 "done",
                 {
                     "status": doubt.status,
-                    "model": stats.model or None,
+                    "intent": doubt.intent,
+                    "model": usage.get("model"),
                     "input_tokens": doubt.input_tokens,
                     "output_tokens": doubt.output_tokens,
-                    "embed_tokens": retrieval.embed_tokens,
-                    "cost_usd": total_cost,
-                    "retrieval_cost_usd": retrieval.cost_usd,
+                    "embed_tokens": usage.get("embed_tokens", 0),
+                    "cost_usd": doubt.cost_usd,
+                    "retrieval_cost_usd": usage.get("retrieval_cost_usd", 0.0),
                     "latency_ms": doubt.latency_ms,
-                    "first_token_ms": stats.first_token_ms,
-                    "attempts": stats.attempts,
-                    "top_score": retrieval.top_score,
-                    "relevance": retrieval.relevance(),
+                    "first_token_ms": usage.get("first_token_ms", 0),
+                    "attempts": usage.get("attempts", 0),
+                    "top_score": usage.get("top_score"),
+                    "relevance": usage.get("relevance"),
+                    "confidence": usage.get("confidence"),
                 },
             )
         except (LLMError, IndexOutdated) as err:
-            doubt.answer = answer or None
             yield sse("error", {"code": err.code, "message": err.user_message})
         except Exception as exc:  # noqa: BLE001 - the stream must always end with an event
-            doubt.answer = answer or None
+            log.exception("Chat failed")
             yield sse("error", {"code": "internal_error", "message": f"Something went wrong: {type(exc).__name__}"})
         finally:
             doubt.latency_ms = doubt.latency_ms or int((time.perf_counter() - started) * 1000)

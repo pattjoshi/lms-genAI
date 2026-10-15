@@ -19,6 +19,7 @@ import {
 } from "lucide-react";
 import { useEffect, useRef, useState } from "react";
 
+import { ChatCard, RouteLine, type CardData, type RouteInfo } from "@/components/ChatCards";
 import { PortalShell } from "@/components/PortalShell";
 import { Alert, Button, Card, Chip, EmptyState } from "@/components/ui";
 import { useApi } from "@/components/useApi";
@@ -65,6 +66,8 @@ type Details = {
 
 type Done = {
   status: "answered" | "no_context";
+  intent: string | null;
+  confidence: "high" | "medium" | "low" | null;
   model: string | null;
   input_tokens: number;
   output_tokens: number;
@@ -75,13 +78,15 @@ type Done = {
   first_token_ms: number;
   attempts: number;
   top_score: number | null;
-  relevance: Relevance;
+  relevance: Relevance | null;
 };
 
 type Turn = {
   question: string;
   answer: string;
   sources: Source[];
+  route?: RouteInfo;
+  cards?: CardData[];
   details?: Details;
   done?: Done;
   error?: { code: string; message: string };
@@ -92,8 +97,9 @@ type ScopeCourse = { id: number; code: string; title: string; modules: { id: num
 
 const SUGGESTIONS = [
   "How does backpropagation compute gradients?",
-  "What is the chain rule, with an example?",
-  "Why does my model overfit, and how do I fix it?",
+  "I don't understand backpropagation",
+  "Quiz me on my weak topics",
+  "What are my weak topics?",
   "What's the difference between a list and a tuple?",
 ];
 
@@ -329,11 +335,13 @@ function TurnView({
   index,
   streaming,
   showDetails,
+  onAsk,
 }: {
   turn: Turn;
   index: number;
   streaming: boolean;
   showDetails: boolean;
+  onAsk: (q: string) => void;
 }) {
   const [active, setActive] = useState<number | null>(null);
   let n = 0;
@@ -360,11 +368,27 @@ function TurnView({
         </span>
         <div className="min-w-0 flex-1 space-y-3">
           <div className="rounded-2xl rounded-tl-md border border-line bg-surface px-4 py-3">
+            {turn.route && <RouteLine route={turn.route} />}
             {turn.answer ? (
               <AnswerText text={turn.answer} onCite={cite} />
             ) : (
               <p className="text-sm text-muted">
-                {turn.details ? "Writing the answer…" : "Searching your course material…"}
+                {!turn.route
+                  ? "Reading your message…"
+                  : turn.route.intent !== "doubt" && !turn.route.fallback
+                    ? "Working on it…"
+                    : turn.details
+                      ? "Writing the answer…"
+                      : "Searching your course material…"}
+              </p>
+            )}
+            {turn.done?.status === "answered" && turn.done.confidence === "low" && (
+              <p className="mt-2 flex items-start gap-1.5 text-xs text-warn">
+                <Info className="mt-px h-3.5 w-3.5 shrink-0" />
+                <span>
+                  Not sure: the best source only just passed the relevance check, so this answer may be off. Check
+                  the sources below, or ask your teacher.
+                </span>
               </p>
             )}
             {turn.details?.rewritten && !showDetails && (
@@ -384,6 +408,8 @@ function TurnView({
           </div>
           {turn.error && <Alert title={`${turn.error.message} (${turn.error.code})`} />}
 
+          {turn.cards?.map((c, i) => <ChatCard key={i} card={c} onAsk={onAsk} />)}
+
           {turn.sources.length > 0 && <SourceList numbered={numbered} anchor={anchor} active={active} />}
 
           {showDetails && turn.details && <DetailsPanel details={turn.details} numbered={numbered} />}
@@ -391,10 +417,13 @@ function TurnView({
           {turn.done && (
             <div className="flex flex-wrap gap-1.5">
               {turn.done.model && <Chip mono>{turn.done.model}</Chip>}
-              <Chip mono>
-                {turn.done.input_tokens} in / {turn.done.output_tokens} out
-              </Chip>
-              <Chip mono>{turn.done.embed_tokens} embed</Chip>
+              {turn.done.confidence && <Chip mono>confidence {turn.done.confidence}</Chip>}
+              {turn.done.input_tokens + turn.done.output_tokens > 0 && (
+                <Chip mono>
+                  {turn.done.input_tokens} in / {turn.done.output_tokens} out
+                </Chip>
+              )}
+              {turn.done.embed_tokens > 0 && <Chip mono>{turn.done.embed_tokens} embed</Chip>}
               <Chip mono>${turn.done.cost_usd.toFixed(6)}</Chip>
               {turn.done.first_token_ms > 0 && <Chip mono>first token {turn.done.first_token_ms} ms</Chip>}
               <Chip mono>total {turn.done.latency_ms} ms</Chip>
@@ -530,7 +559,9 @@ function AskDoubt() {
         "/chat/ask",
         { question: q, conversation_id: conversationId, course_id: courseId, module_id: moduleId },
         (event, data) => {
-          if (event === "sources") update((t) => ({ ...t, sources: data.sources, details: data.retrieval }));
+          if (event === "route") update((t) => ({ ...t, route: data }));
+          else if (event === "card") update((t) => ({ ...t, cards: [...(t.cards ?? []), data] }));
+          else if (event === "sources") update((t) => ({ ...t, sources: data.sources, details: data.retrieval }));
           else if (event === "token") update((t) => ({ ...t, answer: t.answer + data.text }));
           else if (event === "done") update((t) => ({ ...t, done: data }));
           else if (event === "error") update((t) => ({ ...t, error: data }));
@@ -548,7 +579,7 @@ function AskDoubt() {
     <div className="grid gap-5 xl:grid-cols-[1fr_280px]">
       <Card
         title="Ask a doubt"
-        subtitle="Answers come only from the material of your enrolled courses, with sources. Follow-up questions work."
+        subtitle="Ask about your courses, say what you don't understand, ask to be quizzed, or ask about your progress. Answers come only from your enrolled courses."
         icon={<Sparkles className="h-4 w-4" />}
         // min-w-0: a grid column won't shrink below its content's width (long file names) otherwise
         className="min-w-0"
@@ -598,6 +629,7 @@ function AskDoubt() {
               index={i}
               streaming={busy && i === turns.length - 1}
               showDetails={showDetails}
+              onAsk={ask}
             />
           ))}
           <div ref={bottom} />
