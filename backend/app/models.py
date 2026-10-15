@@ -428,3 +428,41 @@ class PracticeSet(Base):
     answers: Mapped[dict] = mapped_column(JSON, default=dict, comment="{question index: chosen option index}")
     cost_usd: Mapped[float] = mapped_column(Float, default=0.0)
     created_at: Mapped[datetime] = mapped_column(DateTime(timezone=True), server_default=func.now())
+
+
+# ---------------------------------------------------------------------------
+# Phase 4b: MCP access
+# ---------------------------------------------------------------------------
+
+
+class ApiToken(Base):
+    __tablename__ = "api_tokens"
+    __table_args__ = {
+        "comment": "Personal access tokens for MCP clients (Claude Desktop, Cursor, MCP Inspector). Only a SHA-256 "
+        "hash is stored; the token is shown once. A token acts as its user, with that user's role and scopes."
+    }
+
+    id: Mapped[int] = mapped_column(primary_key=True)
+    user_id: Mapped[int] = mapped_column(ForeignKey("users.id"), index=True)
+    name: Mapped[str] = mapped_column(String(80), comment="What the user called it, e.g. 'Claude Desktop'")
+    prefix: Mapped[str] = mapped_column(String(16), comment="First characters, shown in the list to tell tokens apart")
+    token_hash: Mapped[str] = mapped_column(String(64), unique=True)
+    created_at: Mapped[datetime] = mapped_column(DateTime(timezone=True), server_default=func.now())
+    last_used_at: Mapped[datetime | None] = mapped_column(DateTime(timezone=True))
+    revoked_at: Mapped[datetime | None] = mapped_column(DateTime(timezone=True))
+
+
+class McpCall(Base):
+    __tablename__ = "mcp_calls"
+    __table_args__ = {"comment": "Audit log: one row per MCP tool call, resource read or refused request."}
+
+    id: Mapped[int] = mapped_column(primary_key=True)
+    created_at: Mapped[datetime] = mapped_column(DateTime(timezone=True), server_default=func.now(), index=True)
+    user_id: Mapped[int | None] = mapped_column(ForeignKey("users.id"), index=True)
+    token_id: Mapped[int | None] = mapped_column(ForeignKey("api_tokens.id"))
+    via: Mapped[str] = mapped_column(String(10), comment="http | stdio | agent (our own chat agent, in process)")
+    name: Mapped[str] = mapped_column(String(80), comment="Tool name, or resource URI template")
+    arguments: Mapped[dict] = mapped_column(JSON, default=dict)
+    status: Mapped[str] = mapped_column(String(20), comment="ok | error | refused | rate_limited")
+    error: Mapped[str | None] = mapped_column(String(300))
+    latency_ms: Mapped[int] = mapped_column(Integer, default=0)

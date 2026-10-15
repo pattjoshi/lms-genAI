@@ -72,7 +72,11 @@ with a margin → LLM classifier, "doubt" as the safe default), a LangGraph agen
 and a learning-path → doubt fallback edge, long-term memory as facts (quiz averages + `learner_topics`), known
 prerequisites marked from quiz scores (S11), weak topics in the RAG prompt (S12), practice questions with the
 quiz checks, graded on the server (S13, S14), login and payment answers from the student's own records with
-no LLM (S18; tickets in Phase 5) and answer confidence (S7). **4b (next):** the MCP server and client below.
+no LLM (S18; tickets in Phase 5) and answer confidence (S7). **4b (done):** the MCP server below (M1-M11: 7 tools,
+2 resources, 2 prompts, Streamable HTTP + stdio, personal access tokens, rate limit, budget and audit log on
+every call, an MCP access page per portal) and the chat's `assistant` intent: a bounded tool-calling loop
+whose tools come from our own server through `langchain-mcp-adapters`, plus the optional filesystem server
+for a notes folder (M12, dev only). `list_students` also covers T16 (struggling students, by quiz average).
 
 **Phase 4 note (MCP):** every LMS capability is written **once**, as a tool on our MCP server.
 External MCP clients (Claude Desktop, Cursor, VS Code, MCP Inspector) call it over Streamable HTTP or

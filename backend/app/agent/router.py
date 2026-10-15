@@ -81,7 +81,7 @@ def nearest_intent(
 
 
 class RouteChoice(BaseModel):
-    intent: Literal["doubt", "learning_path", "practice", "progress", "support"]
+    intent: Literal["doubt", "learning_path", "practice", "progress", "support", "assistant"]
     topic: str = Field(description="The concept or topic the student names, 1-6 words. Empty string if none.")
 
 

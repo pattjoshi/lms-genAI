@@ -115,6 +115,11 @@ class Settings(BaseSettings):
     known_topic_score: int = 80  # quiz average at or above this = prerequisite marked "you know this"
     practice_questions: int = 3
 
+    # --- MCP (Phase 4b) ---
+    mcp_rate_limit_per_minute: int = 30  # tool calls per token (or per user for stdio/agent) per minute
+    mcp_agent_max_steps: int = 4  # LLM calls the chat's tool-calling assistant may make for one message
+    mcp_notes_dir: str | None = None  # a folder of your own notes, read through an external MCP server (dev only)
+
     # --- Langfuse (tracing) ---
     langfuse_public_key: str | None = None
     langfuse_secret_key: SecretStr | None = None

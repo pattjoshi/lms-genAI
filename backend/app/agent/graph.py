@@ -5,12 +5,14 @@
                               │                  └─▶ doubt     no such concept: answer the question instead
                               ├─▶ practice ──────────▶ END     3 checked practice questions
                               ├─▶ progress ──────────▶ END     weak topics from memory
-                              └─▶ support ───────────▶ END     own login / payment records
+                              ├─▶ support ───────────▶ END     own login / payment records
+                              └─▶ assistant ─────────▶ END     tool-calling loop over our MCP tools (4b)
 
 Why a fixed graph and not a free "ReAct" agent that picks tools in a loop: every path here is known,
 so a graph is cheaper (no LLM call to decide what to do next), faster, testable node by node, and it
 can't loop. The one decision that needs judgement, which branch, is made by the router, cheapest
-method first. Phase 4b moves the tools behind an MCP server; the graph stays.
+method first. Only open, multi-step requests go to the `assistant` branch (Phase 4b), a bounded
+tool-calling loop whose tools come from our own MCP server (app/agent/assistant.py).
 
 Nodes talk to the browser through LangGraph's stream writer: each `emit(event, data)` becomes one
 Server-Sent Event (route, sources, token, card), and chat.py adds `done` at the end.
@@ -18,12 +20,12 @@ Server-Sent Event (route, sources, token, card), and chat.py adds `done` at the 
 
 from typing import Any, TypedDict
 
-from langchain_core.messages import HumanMessage, SystemMessage
 from langgraph.config import get_stream_writer
 from langgraph.graph import END, START, StateGraph
 from sqlalchemy import select
 from sqlalchemy.ext.asyncio import AsyncSession
 
+from app.agent import assistant as assistant_svc
 from app.agent import practice as practice_svc
 from app.agent import support as support_svc
 from app.agent.intents import Intent
@@ -33,7 +35,8 @@ from app.config import get_settings
 from app.graph import study
 from app.llm.service import StreamStats, chat_stream
 from app.models import Course, Doubt, Role, User
-from app.prompts.rag_answer import NO_ANSWER, RAG_MEMORY, RAG_SYSTEM, RAG_USER, RAG_USER_REWRITTEN, format_excerpt
+from app.prompts.rag_answer import NO_ANSWER
+from app.rag.answer import confidence, rag_messages
 from app.rag.retriever import retrieve
 
 
@@ -186,6 +189,48 @@ async def support_node(state: ChatState) -> dict:
     return {}
 
 
+async def assistant_node(state: ChatState) -> dict:
+    session, user, doubt = state["session"], state["user"], state["doubt"]
+
+    def on_step(step: assistant_svc.ToolStep) -> None:
+        emit("tool", {"name": step.name, "args": step.args, "ok": step.ok})
+        card = tool_card(step)
+        if card:
+            emit("card", card)
+
+    run = await assistant_svc.run(session, user, state["question"], on_step=on_step)
+    say(run.answer)
+    doubt.answer, doubt.status = run.answer, "answered"
+    usage = dict(state.get("usage") or {})
+    usage.update(
+        input_tokens=run.input_tokens,
+        output_tokens=run.output_tokens,
+        cost_usd=usage.get("cost_usd", 0.0) + run.cost_usd,
+        agent_steps=[{"name": s.name, "args": s.args, "ok": s.ok} for s in run.steps],
+        llm_calls=run.llm_calls,
+    )
+    if run.notes_error:
+        emit("tool", {"name": "notes", "args": {}, "ok": False, "error": run.notes_error})
+    return {"usage": usage}
+
+
+def tool_card(step: assistant_svc.ToolStep) -> dict | None:
+    """Show what a tool found as the same card the fixed branches use (path, practice, progress)."""
+    data = step.structured
+    if not step.ok or not data:
+        return None
+    if step.name == "get_learning_path" and data.get("found"):
+        return {"kind": "path", "path": data["path"]}
+    if step.name == "practice_questions":
+        questions = [{**q, "difficulty": ""} for q in data["questions"]]
+        practice = {"id": data["practice_id"], "topic": data["topic"], "course_code": data["course_code"]}
+        return {"kind": "practice", "practice": {**practice, "questions": questions}}
+    if step.name == "my_weak_topics" and data.get("weak_topics"):
+        weak = [{"name": w["topic"], "course_code": w["course_code"], "why": w["why"]} for w in data["weak_topics"]]
+        return {"kind": "progress", "weak": weak}
+    return None
+
+
 async def doubt_node(state: ChatState) -> dict:
     """The Phase 1-2 RAG answer: retrieve (rewrite, hybrid, rerank, corrective retry) then stream."""
     s = get_settings()
@@ -223,18 +268,11 @@ async def doubt_node(state: ChatState) -> dict:
         answer, doubt.status = NO_ANSWER, "no_context"
         say(answer)
     else:
-        excerpts = "\n\n".join(format_excerpt(i, x) for i, x in enumerate(used, start=1))
-        if retrieval.rewritten:
-            prompt = RAG_USER_REWRITTEN.format(excerpts=excerpts, question=retrieval.query, original=question)
-        else:
-            prompt = RAG_USER.format(excerpts=excerpts, question=question)
-        system = RAG_SYSTEM.format(role=user.role.value, name=user.full_name)
-        if weak := state.get("weak"):
-            system += RAG_MEMORY.format(topics=", ".join(w.name for w in weak))
+        weak = [w.name for w in state.get("weak") or []]
         try:
             async for piece in chat_stream(
                 session,
-                messages=[SystemMessage(system), HumanMessage(prompt)],
+                messages=rag_messages(user, question, retrieval, weak),
                 feature="rag_answer",
                 user=user,
                 stats=stats,
@@ -264,17 +302,6 @@ async def doubt_node(state: ChatState) -> dict:
     return {"usage": usage}
 
 
-def confidence(relevance: dict) -> str:
-    """S7: how sure the answer is, from how far the best source cleared the relevance threshold.
-    A score just above the threshold means the AI got material that is only loosely related."""
-    best, threshold = relevance.get("best"), relevance.get("threshold") or 0
-    if best is None:
-        return "low"
-    margin = best - threshold
-    span = 0.3 if relevance.get("by") == "rerank" else 0.15  # cosine scores sit in a narrower band
-    return "high" if margin >= span else "medium" if margin >= span / 3 else "low"
-
-
 # ---------------------------------------------------------------------------
 # The graph
 # ---------------------------------------------------------------------------
@@ -289,11 +316,12 @@ def build_graph():
     g.add_node("practice", practice_node)
     g.add_node("progress", progress_node)
     g.add_node("support", support_node)
+    g.add_node("assistant", assistant_node)
     g.add_edge(START, "memory")
     g.add_edge("memory", "route")
     g.add_conditional_edges("route", pick_branch, {i.value: i.value for i in Intent})
     g.add_conditional_edges("learning_path", after_path, {"doubt": "doubt", END: END})
-    for node in ("doubt", "practice", "progress", "support"):
+    for node in ("doubt", "practice", "progress", "support", "assistant"):
         g.add_edge(node, END)
     return g.compile()
 

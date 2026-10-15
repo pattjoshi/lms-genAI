@@ -23,9 +23,11 @@ from app.db import engine
 from app.graph import store as graph_store
 from app.llm.errors import LLMError
 from app.llm.tracing import init_tracing, shutdown_tracing
+from app.mcp_server.http import mcp_endpoint
+from app.mcp_server.server import mcp
 from app.permissions import PermissionDenied
 from app.rag import reranker, vectorstore
-from app.routers import ai, auth, chat, concepts, data, documents, health, learning, portal, practice, quizzes
+from app.routers import ai, auth, chat, concepts, data, documents, health, learning, portal, practice, quizzes, tokens
 from app.schema import ensure_schema
 
 logging.basicConfig(level=logging.INFO, format="%(asctime)s %(levelname)-7s %(name)s: %(message)s")
@@ -94,7 +96,8 @@ async def lifespan(_: FastAPI):
     # Load the reranker in the background (the first run downloads ~80 MB), so the first
     # question doesn't wait for it. Failures are only logged: answers work without it.
     warm_up = asyncio.create_task(reranker.warm_up()) if settings.rag_rerank else None
-    yield
+    async with mcp.session_manager.run():  # the MCP server's request handling (Phase 4b)
+        yield
     if warm_up is not None and not warm_up.done():
         warm_up.cancel()
     shutdown_tracing()
@@ -123,8 +126,12 @@ for r in (
     learning.router,
     quizzes.router,
     practice.router,
+    tokens.router,
 ):
     app.include_router(r)
+
+# Phase 4b: the MCP server (Streamable HTTP). Its own auth: personal access tokens, not X-User-Id.
+app.router.add_route("/mcp", mcp_endpoint(), include_in_schema=False)
 
 
 # --- Error handling: every error leaves the API as {"error": code, "message": text} ---

@@ -8,6 +8,7 @@ import {
   Inbox,
   LayoutDashboard,
   ListChecks,
+  Plug,
   MessageCircleQuestion,
   Network,
   Route,
@@ -19,7 +20,7 @@ import {
 import type { Role } from "./session";
 
 // Phase whose features are built. Roadmap items up to this phase show as "Live".
-export const CURRENT_PHASE = 3;
+export const CURRENT_PHASE = 4;
 
 // href = page exists; phase = arrives in that phase (greyed out until then)
 export type NavItem = { label: string; icon: LucideIcon; href?: string; phase?: number };
@@ -31,6 +32,7 @@ export const NAV: Record<Role, NavItem[]> = {
     { label: "Learning path", icon: Route, href: "/student/path" },
     { label: "Quizzes", icon: ListChecks, href: "/student/quizzes" },
     { label: "Practice", icon: Dumbbell, href: "/student/ask?q=Quiz%20me%20on%20my%20weak%20topics" },
+    { label: "MCP access", icon: Plug, href: "/student/mcp" },
     { label: "My tickets", icon: Ticket, phase: 5 },
   ],
   teacher: [
@@ -38,14 +40,17 @@ export const NAV: Record<Role, NavItem[]> = {
     { label: "Course files", icon: Upload, href: "/teacher/files" },
     { label: "Concept graph", icon: Network, href: "/teacher/concepts" },
     { label: "Quizzes", icon: ListChecks, href: "/teacher/quizzes" },
+    { label: "MCP access", icon: Plug, href: "/teacher/mcp" },
     { label: "Doubt insights", icon: BookOpen, phase: 5 },
   ],
   support: [
     { label: "Dashboard", icon: LayoutDashboard, href: "/support" },
+    { label: "MCP access", icon: Plug, href: "/support/mcp" },
     { label: "Ticket queue", icon: Inbox, phase: 5 },
   ],
   admin: [
     { label: "Dashboard", icon: LayoutDashboard, href: "/admin" },
+    { label: "MCP access", icon: Plug, href: "/admin/mcp" },
     { label: "Ask the data", icon: ChartColumn, phase: 6 },
     { label: "AI quality & cost", icon: Gauge, phase: 7 },
   ],
@@ -62,9 +67,9 @@ export const ROADMAP: Record<Role, Feature[]> = {
     { id: "S4", name: "Follow-up questions work", phase: 2 },
     { id: "S9", name: "\"I don't understand X\" → learning path", phase: 3, live: true },
     { id: "S15", name: "Take teacher-approved quizzes", phase: 3, live: true },
-    { id: "S12", name: "Assistant remembers your weak topics", phase: 4, live: true },
-    { id: "S13", name: "Practice questions from weak topics", phase: 4, live: true },
-    { id: "S18", name: "Login/payment issues go to support", phase: 4, live: true },
+    { id: "S12", name: "Assistant remembers your weak topics", phase: 4 },
+    { id: "S13", name: "Practice questions from weak topics", phase: 4 },
+    { id: "S18", name: "Login/payment issues go to support", phase: 4 },
     { id: "M3", name: "Use your course notes from Claude Desktop / Cursor (MCP)", phase: 4 },
     { id: "S6", name: "👍 / 👎 feedback, 👎 creates a ticket", phase: 5 },
   ],
