@@ -27,7 +27,21 @@ from app.mcp_server.http import mcp_endpoint
 from app.mcp_server.server import mcp
 from app.permissions import PermissionDenied
 from app.rag import reranker, vectorstore
-from app.routers import ai, auth, chat, concepts, data, documents, health, learning, portal, practice, quizzes, tokens
+from app.routers import (
+    ai,
+    auth,
+    chat,
+    concepts,
+    data,
+    documents,
+    health,
+    learning,
+    portal,
+    practice,
+    quizzes,
+    tickets,
+    tokens,
+)
 from app.schema import ensure_schema
 
 logging.basicConfig(level=logging.INFO, format="%(asctime)s %(levelname)-7s %(name)s: %(message)s")
@@ -127,6 +141,7 @@ for r in (
     quizzes.router,
     practice.router,
     tokens.router,
+    tickets.router,
 ):
     app.include_router(r)
 

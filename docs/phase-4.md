@@ -365,6 +365,6 @@ Start the backend once (the new tables and columns are added), then as **Riya** 
 
 ## 5. Next: Phase 5
 
-Phase 4 is done. Phase 5 adds support tickets: login and payment messages (already saved with intent
+Phase 4 is done. Phase 5 ([docs/phase-5.md](phase-5.md)) adds support tickets: login and payment messages (already saved with intent
 `support`), low-confidence answers and 👎 feedback become tickets in a queue, and support staff answer them
 with the full context (question, sources, AI draft, confidence). A ticket-creation MCP tool comes with it.

@@ -40,10 +40,10 @@ CATEGORIES = ["semantic", "keyword", "paraphrase", "follow_up"]
 # Each mode adds one step, so the difference between two rows is what that step is worth.
 MODES = {
     "dense": RetrievalOptions.baseline(),  # Phase 1
-    "hybrid": RetrievalOptions(hybrid=True, rerank=False, rewrite=False, corrective=False),
-    "dense+rerank": RetrievalOptions(hybrid=False, rerank=True, rewrite=False, corrective=False),
-    "hybrid+rerank": RetrievalOptions(hybrid=True, rerank=True, rewrite=False, corrective=False),
-    "full": RetrievalOptions(hybrid=True, rerank=True, rewrite=True, corrective=True),
+    "hybrid": RetrievalOptions(hybrid=True, rerank=False, rewrite=False, corrective=False, faq=False),
+    "dense+rerank": RetrievalOptions(hybrid=False, rerank=True, rewrite=False, corrective=False, faq=False),
+    "hybrid+rerank": RetrievalOptions(hybrid=True, rerank=True, rewrite=False, corrective=False, faq=False),
+    "full": RetrievalOptions(hybrid=True, rerank=True, rewrite=True, corrective=True, faq=False),
 }
 
 

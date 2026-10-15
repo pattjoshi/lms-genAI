@@ -5,6 +5,7 @@ system. Write a capability once as an MCP tool and every MCP client can use it: 
 Cursor, VS Code, MCP Inspector, and our own chat agent (app/agent/assistant.py).
 
     tools      actions the model decides to call           search_course_material, ask_doubt, ...
+               (Phase 5: my_tickets, and create_ticket, the first write that needs the user's "yes")
     resources  data the app (or user) attaches as context  course://DL301/syllabus, doc://12/chunks
     prompts    templates the user picks from a menu        explain_like_beginner, quiz_me
 
@@ -53,12 +54,14 @@ from app.models import (
     Module,
     Quiz,
     QuizAttempt,
+    Role,
     User,
 )
 from app.permissions import PermissionDenied
 from app.rag import answer as rag_answer
 from app.rag.retriever import retrieve
 from app.scopes import manageable_course_ids, readable_course_ids, student_list_query
+from app.tickets import service as tickets_svc
 
 log = logging.getLogger("app.mcp")
 
@@ -367,6 +370,43 @@ async def list_students(course_code: str | None = None) -> dict[str, Any]:
             rows.append({"name": s.full_name, "city": s.city, "quiz_avg": avg, "struggling": struggling})
         rows.sort(key=lambda r: (r["quiz_avg"] is None, r["quiz_avg"] or 0))
         return {"count": len(rows), "students": rows}
+
+
+@mcp.tool(annotations=READ_ONLY)
+async def my_tickets() -> dict[str, Any]:
+    """The user's support tickets, newest first: what was asked, the status (open, in_progress, resolved)
+    and, once resolved, support's answer."""
+    async with guarded("my_tickets", {}) as (session, user):
+        rows = await tickets_svc.mine(session, user)
+        keep = ("id", "subject", "status", "reason", "category", "course_code", "resolution", "created_at")
+        return {"tickets": [{k: t[k] for k in keep} for t in rows]}
+
+
+@mcp.tool(annotations=ToolAnnotations(readOnlyHint=False, destructiveHint=False, idempotentHint=False))
+async def create_ticket(subject: str, details: str = "", confirm: bool = False) -> dict[str, Any]:
+    """Students: send a question or problem to the human support team.
+
+    Two steps, because a ticket is read by a person: first call WITHOUT confirm to get a preview, show it to
+    the user and ask them; only call again with confirm=true if they say yes. Use ask_doubt for course
+    questions the material can answer.
+    """
+    args = {"subject": subject, "details": details or None, "confirm": confirm}
+    async with guarded("create_ticket", args) as (session, user):
+        if user.role != Role.student:
+            raise PermissionDenied("Only students open support tickets.")
+        subject = subject.strip()
+        if len(subject) < 5:
+            raise ToolError("Write a subject of at least 5 characters.")
+        if not confirm:
+            return {
+                "created": False,
+                "preview": {"subject": subject, "details": details.strip(), "to": "the support team"},
+                "message": "Nothing was sent. Show this preview to the user; if they agree, call create_ticket "
+                "again with the same text and confirm=true.",
+            }
+        ticket = await tickets_svc.open_by_student(session, user, subject, details)
+        await session.commit()
+        return {"created": True, "ticket_id": ticket.id, "status": ticket.status, "category": ticket.category}
 
 
 # ---------------------------------------------------------------------------

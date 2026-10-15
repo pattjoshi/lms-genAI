@@ -4,6 +4,7 @@
 // course excerpts shown as numbered sources ([1], [2] in the answer).
 // Phase 2: follow-up questions (one conversation id per chat), "Search in" filters,
 // and a "Show details" panel that explains how the sources were found.
+// Phase 5: 👍/👎 on every answer, and a note when a message was passed to the support team (a ticket).
 
 import {
   BookOpen,
@@ -14,9 +15,14 @@ import {
   MessageSquarePlus,
   Microscope,
   Send,
+  ShieldCheck,
   Sparkles,
+  ThumbsDown,
+  ThumbsUp,
+  Ticket as TicketIcon,
   Trash2,
 } from "lucide-react";
+import Link from "next/link";
 import { useEffect, useRef, useState } from "react";
 
 import { ChatCard, RouteLine, ToolSteps, type CardData, type RouteInfo, type ToolStep } from "@/components/ChatCards";
@@ -79,6 +85,17 @@ type Done = {
   attempts: number;
   top_score: number | null;
   relevance: Relevance | null;
+  doubt_id?: number;
+  ticket?: TicketRef | null;
+};
+
+type TicketRef = { id: number; reason: string; category: string };
+
+const TICKET_NOTE: Record<string, string> = {
+  no_answer: "The course material doesn't cover this, so a support person will answer it.",
+  low_confidence: "I wasn't sure about this answer, so a support person will check it.",
+  thumbs_down: "Thanks. A support person will look at this answer.",
+  support: "Passed to the support team.",
 };
 
 type Turn = {
@@ -175,11 +192,16 @@ function SourceCard({
         </span>
         <div className="min-w-0 flex-1">
           <p className="flex items-center gap-1.5 truncate font-medium text-fg">
-            <FileText className="h-3.5 w-3.5 shrink-0 text-muted" />
+            {source.file_type === "faq" ? (
+              <ShieldCheck className="h-3.5 w-3.5 shrink-0 text-ok" />
+            ) : (
+              <FileText className="h-3.5 w-3.5 shrink-0 text-muted" />
+            )}
             <span className="truncate">{source.file_name}</span>
           </p>
           <p className="mt-0.5 text-xs text-muted">
-            {source.course_code} · {where(source)}
+            {source.course_code}
+            {source.file_type === "faq" ? " · written by the support team for this question" : ` · ${where(source)}`}
             {source.topic && source.topic !== where(source) && ` · ${source.topic}`}
           </p>
         </div>
@@ -417,6 +439,8 @@ function TurnView({
 
           {showDetails && turn.details && <DetailsPanel details={turn.details} numbered={numbered} />}
 
+          {turn.done?.doubt_id && <Feedback doubtId={turn.done.doubt_id} ticket={turn.done.ticket ?? null} />}
+
           {turn.done && (
             <div className="flex flex-wrap gap-1.5">
               {turn.done.model && <Chip mono>{turn.done.model}</Chip>}
@@ -434,6 +458,52 @@ function TurnView({
           )}
         </div>
       </div>
+    </div>
+  );
+}
+
+/** S6: rate the answer. 👎 asks support to look at it (the server opens or marks a ticket). */
+function Feedback({ doubtId, ticket: initial }: { doubtId: number; ticket: TicketRef | null }) {
+  const [value, setValue] = useState<number | null>(null);
+  const [ticket, setTicket] = useState<TicketRef | null>(initial);
+  const [error, setError] = useState<string | null>(null);
+
+  async function rate(v: number) {
+    const next = value === v ? 0 : v; // pressing again takes it back
+    setError(null);
+    try {
+      const r = await apiFetch<{ feedback: number | null; ticket: TicketRef | null }>(
+        `/chat/doubts/${doubtId}/feedback`,
+        { method: "POST", body: JSON.stringify({ value: next }) },
+      );
+      setValue(r.feedback);
+      if (r.ticket) setTicket(r.ticket);
+    } catch (e) {
+      setError(e instanceof ApiError ? e.message : String(e));
+    }
+  }
+
+  const btn = (active: boolean) =>
+    `rounded-lg p-1.5 transition-colors ${active ? "bg-brand-soft text-brand-ink" : "text-faint hover:bg-surface-2 hover:text-fg"}`;
+  return (
+    <div className="flex flex-wrap items-center gap-2 text-xs text-muted">
+      <button onClick={() => rate(1)} title="Helpful" aria-label="Helpful" className={btn(value === 1)}>
+        <ThumbsUp className="h-3.5 w-3.5" />
+      </button>
+      <button onClick={() => rate(-1)} title="Not helpful: ask support" aria-label="Not helpful" className={btn(value === -1)}>
+        <ThumbsDown className="h-3.5 w-3.5" />
+      </button>
+      {ticket && (
+        <Link
+          href="/student/tickets"
+          className="inline-flex items-center gap-1.5 rounded-full border border-line bg-surface-2 px-2.5 py-0.5 hover:text-fg"
+        >
+          <TicketIcon className="h-3.5 w-3.5" />
+          {TICKET_NOTE[value === -1 ? "thumbs_down" : ticket.reason] ?? "Passed to the support team."} Ticket #
+          {ticket.id}
+        </Link>
+      )}
+      {error && <span className="text-bad">{error}</span>}
     </div>
   );
 }

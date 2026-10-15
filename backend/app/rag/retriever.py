@@ -7,6 +7,7 @@
       -> 4. rerank the ~20 candidates with a cross-encoder  (reranker.py, local CPU)
       -> 5. keep the best RAG_TOP_K, mark which are relevant enough to use
       -> 6. nothing relevant? rewrite into textbook terms and search once more (corrective)
+      -> 7. knowledge base: an answer support already wrote for the same question goes first (Phase 5)
 
 Every step can be switched off (RetrievalOptions / .env), which is how the eval measures
 what each one adds. With everything off it is exactly Phase 1: top-k cosine search.
@@ -30,6 +31,7 @@ from app.models import Module, User
 from app.rag import reranker, rewrite, sparse, vectorstore
 from app.rag.fusion import rrf
 from app.scopes import readable_course_ids
+from app.tickets.faq import search as faq_search
 
 
 @dataclass(frozen=True)
@@ -38,6 +40,7 @@ class RetrievalOptions:
     rerank: bool = True
     rewrite: bool = True
     corrective: bool = True
+    faq: bool = True  # Phase 5: search the knowledge base of support answers too
 
     @classmethod
     def from_settings(cls) -> "RetrievalOptions":
@@ -47,7 +50,7 @@ class RetrievalOptions:
     @classmethod
     def baseline(cls) -> "RetrievalOptions":
         """Phase 1 behaviour: dense search only."""
-        return cls(hybrid=False, rerank=False, rewrite=False, corrective=False)
+        return cls(hybrid=False, rerank=False, rewrite=False, corrective=False, faq=False)
 
 
 @dataclass
@@ -71,6 +74,7 @@ class SearchResult:
     embed_tokens: int = 0
     embed_cost_usd: float = 0.0
     timings_ms: dict = field(default_factory=dict)
+    query_vec: list[float] = field(default_factory=list)  # reused by the knowledge-base search
 
     @property
     def has_context(self) -> bool:
@@ -96,6 +100,7 @@ class Retrieval:
     embed_cost_usd: float = 0.0
     timings_ms: dict = field(default_factory=dict)
     warnings: list[str] = field(default_factory=list)
+    faq_hits: int = 0  # knowledge-base answers put in front of the sources
 
     @property
     def has_context(self) -> bool:
@@ -118,9 +123,10 @@ class Retrieval:
     def relevance(self) -> dict:
         """Which signal decided 'relevant or not', for the UI and the doubt log."""
         s = get_settings()
+        faq = {"faq": self.sources[0]["score"]} if self.faq_hits else {}  # a verified answer matched
         if self.search.reranked:
-            return {"by": "rerank", "best": self.top_rerank_score, "threshold": s.rag_min_rerank_score}
-        return {"by": "cosine", "best": self.top_score, "threshold": s.rag_min_score}
+            return {"by": "rerank", "best": self.top_rerank_score, "threshold": s.rag_min_rerank_score, **faq}
+        return {"by": "cosine", "best": self.top_score, "threshold": s.rag_min_score, **faq}
 
     def details(self) -> dict:
         """'How this answer was found' panel."""
@@ -136,6 +142,8 @@ class Retrieval:
             "rerank_error": self.search.rerank_error,
             "rewrite": self.options.rewrite,
             "corrective": self.options.corrective,
+            "faq": self.options.faq,
+            "faq_hits": self.faq_hits,
             "course_ids": self.course_ids,
             "module_id": self.module_id,
             "relevance": self.relevance(),
@@ -203,6 +211,7 @@ async def _search(
     started = time.perf_counter()
     embedded = await embed_texts(session, [query], feature="rag_embed_query", user=user)
     result.embed_tokens, result.embed_cost_usd = embedded.tokens, embedded.cost_usd
+    result.query_vec = embedded.vectors[0]
     result.timings_ms["embed"] = _ms(started)
 
     # Fetch more than top_k when a later step (fusion / reranking) will choose among them.
@@ -308,6 +317,22 @@ async def retrieve(
     result.sources = [_source(rank, c) for rank, c in enumerate(found.candidates, start=1)]
     if found.rerank_error:
         result.warnings.append(found.rerank_error)
+
+    # 7. Knowledge base: answers support wrote for the same question (Phase 5, app/tickets/faq.py).
+    # Reuses the query vector, so it costs no extra embedding.
+    if opts.faq:
+        started = time.perf_counter()
+        try:
+            hits = await faq_search(session, found.query_vec, course_ids)
+        except Exception as exc:  # noqa: BLE001 - the knowledge base is a bonus; never fail the search for it
+            hits = []
+            result.warnings.append(f"Knowledge base skipped: {type(exc).__name__}")
+        if hits:
+            result.faq_hits = len(hits)
+            result.sources = hits + result.sources
+            for rank, x in enumerate(result.sources, start=1):
+                x["rank"] = rank
+        result.timings_ms["faq"] = _ms(started)
     return result
 
 
