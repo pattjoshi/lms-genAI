@@ -523,3 +523,36 @@ class FaqEntry(Base):
     created_by: Mapped[int] = mapped_column(ForeignKey("users.id"))
     created_at: Mapped[datetime] = mapped_column(DateTime(timezone=True), server_default=func.now())
     active: Mapped[bool] = mapped_column(Boolean, default=True, comment="Support can withdraw an entry")
+
+
+# ---------------------------------------------------------------------------
+# Phase 6: the SQL agent
+# ---------------------------------------------------------------------------
+
+
+class SqlQuery(Base):
+    __tablename__ = "sql_queries"
+    __table_args__ = {
+        "comment": "Every question asked to the SQL agent: the SQL it wrote (each attempt), how it went, and the "
+        "answer. The agent itself can't read this table."
+    }
+
+    id: Mapped[int] = mapped_column(primary_key=True)
+    user_id: Mapped[int] = mapped_column(ForeignKey("users.id"), index=True)
+    question: Mapped[str] = mapped_column(Text)
+    sql: Mapped[str | None] = mapped_column(Text, comment="The query that ran (the last attempt)")
+    attempts: Mapped[list] = mapped_column(
+        JSON, default=list, comment="[{sql, error, stage}] for every try, so self-corrections are visible"
+    )
+    status: Mapped[str] = mapped_column(
+        String(20), comment="answered | no_rows | refused (not a data question, or asks to change data) | failed"
+    )
+    row_count: Mapped[int] = mapped_column(Integer, default=0)
+    truncated: Mapped[bool] = mapped_column(Boolean, default=False, comment="More rows than SQL_AGENT_MAX_ROWS")
+    answer: Mapped[str | None] = mapped_column(Text)
+    chart: Mapped[dict | None] = mapped_column(JSON, comment="{type: bar | line | number, x, y} chosen by code")
+    input_tokens: Mapped[int] = mapped_column(Integer, default=0)
+    output_tokens: Mapped[int] = mapped_column(Integer, default=0)
+    cost_usd: Mapped[float] = mapped_column(Float, default=0.0)
+    latency_ms: Mapped[int] = mapped_column(Integer, default=0)
+    created_at: Mapped[datetime] = mapped_column(DateTime(timezone=True), server_default=func.now(), index=True)

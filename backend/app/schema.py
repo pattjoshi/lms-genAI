@@ -8,11 +8,20 @@ In a bigger project this is what a migration tool (Alembic) does, with versioned
 reversible migration files. A short list of safe ALTERs is enough for this project.
 """
 
+import logging
+
 from sqlalchemy import text
+from sqlalchemy.exc import DBAPIError
 from sqlalchemy.ext.asyncio import AsyncConnection
 
 from app import models  # noqa: F401 - registers all tables on Base.metadata
 from app.db import Base
+from app.sql_agent.access import setup_access
+
+log = logging.getLogger("app.schema")
+
+# Set when the SQL agent's read-only user and row-level security could not be set up (Phase 6).
+sql_access_error: str | None = None
 
 UPGRADES = [
     # Phase 1 fixes: document versioning
@@ -51,6 +60,8 @@ UPGRADES = [
     "ALTER TABLE doubts ADD COLUMN IF NOT EXISTS feedback INTEGER",
     "ALTER TABLE doubts ADD COLUMN IF NOT EXISTS feedback_comment TEXT",
     "ALTER TABLE doubts ADD COLUMN IF NOT EXISTS question_vec JSON",
+    # Phase 6: the new sql_queries table is created by create_all; the agent's database user and
+    # row-level security are set up by app/sql_agent/access.py below
 ]
 
 
@@ -58,3 +69,17 @@ async def ensure_schema(conn: AsyncConnection) -> None:
     await conn.run_sync(Base.metadata.create_all)
     for statement in UPGRADES:
         await conn.execute(text(statement))
+    await _setup_sql_access(conn)
+
+
+async def _setup_sql_access(conn: AsyncConnection) -> None:
+    """Phase 6. In a savepoint: if the database user may not create roles, the rest of the schema still
+    commits and only the SQL agent is unavailable (it says why)."""
+    global sql_access_error
+    try:
+        async with conn.begin_nested():
+            await setup_access(conn)
+        sql_access_error = None
+    except (DBAPIError, ValueError) as exc:
+        sql_access_error = f"{type(exc).__name__}: {exc}"[:500]
+        log.warning("Could not set up the SQL agent's read-only user and row-level security: %s", sql_access_error)

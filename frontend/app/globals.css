@@ -40,6 +40,12 @@
   --support: #b45309;
   --support-soft: #fff1dd;
 
+  /* Chart series (Phase 6), in fixed order; checked for colour-blind separation. A table always
+     sits under the chart, so series 3's lower contrast on white is covered. */
+  --series-1: #2a78d6;
+  --series-2: #eb6834;
+  --series-3: #1baf7a;
+
   --ring: rgba(88, 80, 236, 0.35);
   --shadow: 0 1px 2px rgba(15, 20, 36, 0.04), 0 4px 16px rgba(15, 20, 36, 0.04);
 }
@@ -75,6 +81,10 @@
   --support: #fbbf24;
   --support-soft: rgba(251, 191, 36, 0.13);
 
+  --series-1: #3987e5;
+  --series-2: #d95926;
+  --series-3: #199e70;
+
   --ring: rgba(139, 140, 255, 0.45);
   --shadow: 0 1px 2px rgba(0, 0, 0, 0.3), 0 8px 24px rgba(0, 0, 0, 0.25);
 }
@@ -109,6 +119,10 @@
   --color-admin-soft: var(--admin-soft);
   --color-support: var(--support);
   --color-support-soft: var(--support-soft);
+
+  --color-series-1: var(--series-1);
+  --color-series-2: var(--series-2);
+  --color-series-3: var(--series-3);
 
   --font-sans: var(--font-inter), ui-sans-serif, system-ui, "Segoe UI", sans-serif;
   --font-display: var(--font-jakarta), var(--font-inter), ui-sans-serif, system-ui, sans-serif;

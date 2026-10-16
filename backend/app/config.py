@@ -127,6 +127,17 @@ class Settings(BaseSettings):
     ticket_on_no_answer: bool = True  # open a ticket when the course material has no answer (not only low confidence)
     insights_days: int = 30  # teacher insights look at this many days of questions
 
+    # --- SQL agent (Phase 6) ---
+    # A second Postgres login that can only SELECT, and only the rows row-level security lets through.
+    # Created (and its password kept in step) by the backend at startup; see app/sql_agent/access.py.
+    sql_agent_db_user: str = "lms_sql_reader"
+    sql_agent_db_password: SecretStr = SecretStr("lms_sql_reader_password")
+    sql_agent_max_attempts: int = 3  # SQL the model may write for one question (first try + self-corrections)
+    sql_agent_max_rows: int = 200  # rows fetched from a query; more are cut off (and the answer says so)
+    sql_agent_timeout_ms: int = 5000  # Postgres statement_timeout for agent queries
+    sql_agent_answer_rows: int = 30  # rows shown to the LLM to write the answer (the UI gets them all)
+    sql_agent_max_output_tokens: int = 700
+
     # --- Langfuse (tracing) ---
     langfuse_public_key: str | None = None
     langfuse_secret_key: SecretStr | None = None
@@ -157,6 +168,13 @@ class Settings(BaseSettings):
         # default Windows event loop.
         return (
             f"postgresql+asyncpg://{self.postgres_user}:{self.postgres_password}"
+            f"@{self.postgres_host}:{self.postgres_port}/{self.postgres_db}"
+        )
+
+    @property
+    def sql_agent_database_url(self) -> str:
+        return (
+            f"postgresql+asyncpg://{self.sql_agent_db_user}:{self.sql_agent_db_password.get_secret_value()}"
             f"@{self.postgres_host}:{self.postgres_port}/{self.postgres_db}"
         )
 
