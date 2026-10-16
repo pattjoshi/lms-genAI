@@ -1,8 +1,8 @@
 """The permission matrix, as code.
 
 This is the single source of truth for "who may see what". PLAN.md shows the same
-table for humans. Every data access goes through `scope_for()`; later, the agent's
-tool list and the SQL agent's database access are built from it too.
+table for humans. Every data access goes through `scope_for()`; the agent's
+tool list and the SQL agent's row-level security (app/sql_agent/access.py) are built from it too.
 
 The LLM is NOT a security boundary: a prompt can be talked out of a rule, this table can't.
 """
@@ -17,6 +17,8 @@ class Resource(StrEnum):
     COURSE_MATERIAL = "course_material"  # read uploaded files / chunks (RAG answers)
     MANAGE_MATERIAL = "manage_material"  # upload / delete course files
     PAYMENTS = "payments"
+    ACCOUNT_ACTIVITY = "account_activity"  # login history (Phase 6: the SQL agent can query it)
+    TICKETS = "tickets"  # support tickets (Phase 5)
     AI_USAGE = "ai_usage"  # token cost / latency dashboard
 
 
@@ -35,6 +37,8 @@ PERMISSIONS: dict[Role, dict[Resource, Scope]] = {
         Resource.COURSE_MATERIAL: Scope.ENROLLED,
         Resource.MANAGE_MATERIAL: Scope.NONE,
         Resource.PAYMENTS: Scope.OWN,
+        Resource.ACCOUNT_ACTIVITY: Scope.OWN,
+        Resource.TICKETS: Scope.OWN,
         Resource.AI_USAGE: Scope.NONE,
     },
     Role.teacher: {
@@ -42,6 +46,8 @@ PERMISSIONS: dict[Role, dict[Resource, Scope]] = {
         Resource.COURSE_MATERIAL: Scope.OWN_COURSES,
         Resource.MANAGE_MATERIAL: Scope.OWN_COURSES,
         Resource.PAYMENTS: Scope.NONE,
+        Resource.ACCOUNT_ACTIVITY: Scope.NONE,
+        Resource.TICKETS: Scope.NONE,
         Resource.AI_USAGE: Scope.NONE,
     },
     Role.admin: {
@@ -49,6 +55,8 @@ PERMISSIONS: dict[Role, dict[Resource, Scope]] = {
         Resource.COURSE_MATERIAL: Scope.ALL,
         Resource.MANAGE_MATERIAL: Scope.ALL,
         Resource.PAYMENTS: Scope.ALL,
+        Resource.ACCOUNT_ACTIVITY: Scope.ALL,
+        Resource.TICKETS: Scope.ALL,
         Resource.AI_USAGE: Scope.ALL,
     },
     Role.support: {
@@ -56,6 +64,8 @@ PERMISSIONS: dict[Role, dict[Resource, Scope]] = {
         Resource.COURSE_MATERIAL: Scope.ALL,
         Resource.MANAGE_MATERIAL: Scope.NONE,
         Resource.PAYMENTS: Scope.TICKET_STUDENT,
+        Resource.ACCOUNT_ACTIVITY: Scope.TICKET_STUDENT,
+        Resource.TICKETS: Scope.ALL,
         Resource.AI_USAGE: Scope.NONE,
     },
 }

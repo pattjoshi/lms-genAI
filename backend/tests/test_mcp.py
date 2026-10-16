@@ -44,8 +44,10 @@ async def test_tools_and_their_annotations():
         "list_students",
         "my_tickets",
         "create_ticket",
+        "ask_data",
     }
     assert tools["search_course_material"].annotations.readOnlyHint
+    assert tools["ask_data"].annotations.readOnlyHint
     assert not tools["practice_questions"].annotations.readOnlyHint
     assert tools["check_practice_answer"].annotations.idempotentHint
     templates = {t.uriTemplate for t in await server.mcp.list_resource_templates()}

@@ -44,7 +44,7 @@ a pause so you can understand it before the next one.
 | 3 ✅ | **Concept graph + learning paths** | Structured extraction (JSON schema + validation), entity dedup, graph modelling, Cypher traversal, GraphRAG-lite, quiz generation, human approval | "I don't understand X" returns a sensible study order from approved concepts |
 | 4 ✅ | **Routing + agent + MCP** | Intent routing (rules vs embeddings vs LLM), tool calling, LangGraph state machine, short/long-term memory, confidence scoring. **MCP:** tools / resources / prompts, stdio vs Streamable HTTP, token auth, tool annotations, MCP security (tool poisoning, prompt injection in tool results, confused deputy). Our LMS is an MCP **server**; our agent is an MCP **client** of it | Each question goes to the right tool; decisions visible in traces; MCP Inspector and Claude Desktop can call our tools, and a student's token is refused for staff-only tools |
 | 5 ✅ | **Tickets + feedback loop** | Human in the loop, context packaging, knowledge feedback, clustering questions with embeddings | A resolved ticket's answer is used by the AI next time |
-| 6 | **SQL agent (all roles, scoped)** | Schema-aware prompting, few-shot, self-correction loop, SELECT-only validation, read-only DB user, row-level security, chart choice | Plain English → SQL → answer + chart; can't write; can't escape scope |
+| 6 ✅ | **SQL agent (all roles, scoped)** | Schema-aware prompting, few-shot, self-correction loop, SELECT-only validation, read-only DB user, row-level security, chart choice | Plain English → SQL → answer + chart; can't write; can't escape scope |
 | 7 | **Evaluation, guardrails, tracing** | RAG metrics (context precision/recall, faithfulness, relevance), LLM-as-judge and its biases, injection & off-topic guardrails, cost/latency dashboards | One command runs the eval and shows better/worse |
 
 **Phase 1 note:** the enrolled-course filter on retrieval is already in Phase 1, because it is a
@@ -88,6 +88,17 @@ gaps grouped by meaning (T13, T14); MCP gets `my_tickets` and `create_ticket` (w
 **Deviation:** the "FAQ collection" and the question vectors live in Postgres (JSON columns, compared in
 Python), not in a Qdrant collection: a few thousand vectors don't need an index, and resolving a ticket and
 adding its knowledge-base entry stay in one transaction. Move to pgvector or Qdrant at ~50k vectors.
+
+**Phase 6 note (done, one part):** "Ask the data" in every portal (S16, T12, T15, P8, A1-A3). A LangGraph loop:
+one structured call writes the SQL from a schema read from the Postgres comments plus six few-shot examples;
+sqlglot checks it (one SELECT, the agent's 11 tables, no writes, no `pg_*`/`set_config`); Postgres errors and
+validator errors go back to the model (max 3 tries; a write is refused, not retried); a second call writes the
+answer from the rows; code picks the chart (number / line / bar). Queries run as a separate login,
+`lms_sql_reader`: SELECT grants only, read-only by default, `statement_timeout`, a row limit. Row-level security
+policies are generated from the permission matrix, which gained two rows (account activity, tickets).
+**Deviation:** the policies don't read a session setting (`SET app.user_id`), because LLM-written SQL could
+change it with `set_config`; the app writes the asker into `sql_agent_scope` keyed by the reader connection's
+`pg_backend_pid()`, which a query can't change. MCP gets the same agent as `ask_data`.
 
 **Phase 4 note (MCP):** every LMS capability is written **once**, as a tool on our MCP server.
 External MCP clients (Claude Desktop, Cursor, VS Code, MCP Inspector) call it over Streamable HTTP or
@@ -206,6 +217,8 @@ Code: `backend/app/permissions.py` (single source of truth).
 | Student records (profile, enrollments, scores) | Own only | Students of own courses | All | Only the ticket's student |
 | Course material | Enrolled courses | Own courses | All | All |
 | Payments | Own only | None | All | Only the ticket's student |
+| Login history (Phase 6) | Own only | None | All | Only the ticket's student |
+| Support tickets (Phase 6 row; Phase 5 rule) | Own only | None | All | All |
 | AI usage dashboard | None | None | All | None |
 
 ### Three layers
@@ -214,7 +227,7 @@ Code: `backend/app/permissions.py` (single source of truth).
 |---|---|---|
 | 1. Prompt / router | LLM politely refuses out-of-scope questions | Yes (soft layer, for UX only) |
 | 2. Tools per role | A role's agent never receives tools it may not use | No |
-| 3. Database | Queries filtered by scope (Phase 0: WHERE clauses; Phase 6: Postgres row-level security) | No |
+| 3. Database | Queries filtered by scope (Phase 0: WHERE clauses; Phase 6: a read-only Postgres user and row-level security for the SQL agent) | No |
 
 **MCP uses the same layers.** An MCP token identifies a user; layer 2 (tools per role: staff-only tools are
 not even listed for a student token) and layer 3 (scoped queries) apply exactly as in the web app. Tool
@@ -293,7 +306,9 @@ backend/            FastAPI app (uv project)
     evals/          retrieval eval (python -m app.evals.retrieval [--compare])
     graph/          Neo4j concept graph + learning paths (Phase 3)
     agent/          LangGraph router + agent, MCP client (Phase 4)
-    mcp/            MCP server: tools, resources, prompts, token auth (Phase 4)
+    mcp_server/     MCP server: tools, resources, prompts, token auth (Phase 4)
+    tickets/        tickets, knowledge base, doubt insights (Phase 5)
+    sql_agent/      SQL agent: validator, read-only user + row-level security, chart rules (Phase 6)
     routers/        API endpoints
     seed/           dummy data (python -m app.seed --reset)
   scripts/          generate_course_files.py (renders data/course_source -> data/course_files)

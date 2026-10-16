@@ -39,10 +39,12 @@ from app.routers import (
     portal,
     practice,
     quizzes,
+    sql,
     tickets,
     tokens,
 )
 from app.schema import ensure_schema
+from app.sql_agent import run as sql_runner
 
 logging.basicConfig(level=logging.INFO, format="%(asctime)s %(levelname)-7s %(name)s: %(message)s")
 log = logging.getLogger("app")
@@ -117,6 +119,7 @@ async def lifespan(_: FastAPI):
     shutdown_tracing()
     await vectorstore.close()
     await graph_store.close()
+    await sql_runner.close()
     await engine.dispose()
 
 
@@ -142,6 +145,7 @@ for r in (
     practice.router,
     tokens.router,
     tickets.router,
+    sql.router,
 ):
     app.include_router(r)
 
