@@ -5,7 +5,7 @@ from langchain_core.messages import HumanMessage, SystemMessage
 from pydantic import BaseModel, Field
 
 from app.auth import CurrentUser, SessionDep
-from app.llm import service
+from app.llm import service, user_limits
 from app.prompts.hello import HELLO_SYSTEM
 
 router = APIRouter(prefix="/ai", tags=["ai"])
@@ -17,6 +17,7 @@ class HelloIn(BaseModel):
 
 @router.post("/hello")
 async def hello(body: HelloIn, session: SessionDep, user: CurrentUser):
+    await user_limits.check_and_record(session, user, "hello")
     messages = [
         SystemMessage(HELLO_SYSTEM.format(role=user.role.value, name=user.full_name)),
         HumanMessage(body.message),

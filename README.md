@@ -321,6 +321,7 @@ docker compose down                                          # stop databases (d
 | AI test: `quota_exceeded` | OpenAI account out of credit or monthly limit hit |
 | AI test: `model_not_found` | Your key can't use `OPENAI_CHAT_MODEL`. Pick another small model and update the prices in `.env` |
 | AI test: `daily_budget_reached` | Today's spend hit `DAILY_BUDGET_USD`. Resets at midnight IST |
+| Chat says "too fast" / "today's limit" / `user_budget_reached` | Per-user limits: `AI_REQUESTS_PER_MINUTE`, `AI_REQUESTS_PER_DAY`, `STUDENT_DAILY_BUDGET_USD` in `.env` (0 = off) |
 | AI test: `ai_paused` | Circuit breaker opened after repeated failures. Fix the cause; it retries after 60s |
 | Langfuse dot red | Keys missing or wrong in `.env`. The app still works without tracing |
 | Upload fails: `.doc` not supported | Save the file as `.docx` in Word (old binary .doc needs extra tools) |

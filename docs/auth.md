@@ -78,7 +78,11 @@ matches an existing user is linked to it; otherwise a new student account is cre
 
 ## Production checklist
 
-- `APP_ENV=production` (turns off demo login and technical error details).
+- `APP_ENV=production` (turns off demo login and technical error details). It is also the default when
+  `APP_ENV` isn't set. In production the backend refuses to start, and says why, while any of these is
+  wrong: the default `POSTGRES_PASSWORD`, `NEO4J_PASSWORD` or `SQL_AGENT_DB_PASSWORD`,
+  `AUTH_COOKIE_SECURE=false`, a localhost or non-https `FRONTEND_ORIGIN`, no `OPENAI_API_KEY`, or
+  `MCP_NOTES_DIR` set (`production_problems` in `backend/app/config.py`).
 - Serve over https and set `AUTH_COOKIE_SECURE=true`.
 - Frontend and backend on the same site (`app.example.com` + `api.example.com`): keep `AUTH_COOKIE_SAMESITE=lax`.
   Different sites: `none` (needs https).

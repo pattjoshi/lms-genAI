@@ -23,7 +23,9 @@ class Settings(BaseSettings):
     )
 
     # --- App ---
-    app_env: str = "dev"  # "dev" adds technical details to error responses
+    # Safe by default: a server started without APP_ENV runs as production (no demo login, no error
+    # details, and the startup check below). Your local .env sets APP_ENV=dev.
+    app_env: Literal["dev", "test", "production"] = "production"
     app_timezone: str = "Asia/Kolkata"  # "today" for the daily budget uses this zone
     frontend_origin: str = "http://localhost:3000"
 
@@ -63,7 +65,11 @@ class Settings(BaseSettings):
     circuit_breaker_cooldown_seconds: float = 60.0
 
     # --- Cost guard ---
-    daily_budget_usd: float = 1.0
+    daily_budget_usd: float = 1.0  # everyone together: the last safety net
+    # Per person, so one account (or a script behind one) can't use up the day for everyone. 0 = off.
+    ai_requests_per_minute: int = 10  # chat messages, data questions and /ai/hello per user per minute
+    ai_requests_per_day: int = 200  # ...and per user per day (resets at midnight in APP_TIMEZONE)
+    student_daily_budget_usd: float = 0.10  # AI spend per student per day; staff only have the shared budget
 
     # --- Phase 1: upload pipeline ---
     upload_dir: Path = BACKEND_DIR / "storage" / "uploads"
@@ -163,8 +169,9 @@ class Settings(BaseSettings):
     auth_signup_open: bool = True  # anyone may create a student account; staff roles are given by an admin
     auth_max_failed_logins: int = 5  # wrong passwords for one email before it is locked for a while
     auth_lockout_minutes: int = 15
-    # The old "pick a user" login for the seeded demo users. Only ever works when APP_ENV=dev.
-    auth_demo_login: bool = True
+    # The old "pick a user" login for the seeded demo users. Off unless .env turns it on, and even then
+    # it only ever works when APP_ENV=dev.
+    auth_demo_login: bool = False
     # Google sign-in: an OAuth "Web application" client id from Google Cloud Console. Empty = no Google button.
     google_client_id: str | None = None
 
@@ -211,6 +218,39 @@ class Settings(BaseSettings):
     @property
     def langfuse_enabled(self) -> bool:
         return bool(self.langfuse_public_key and self.langfuse_secret_key)
+
+
+# Values that ship in this repo. A production server must not use any of them.
+DEFAULT_SECRETS = {
+    "POSTGRES_PASSWORD": "lms_dev_password",
+    "NEO4J_PASSWORD": "lms_neo4j_password",
+    "SQL_AGENT_DB_PASSWORD": "lms_sql_reader_password",
+}
+
+
+def production_problems(s: Settings) -> list[str]:
+    """Why these settings aren't safe to run as production (empty = fine). Checked at startup."""
+    if s.app_env != "production":
+        return []
+    current = {
+        "POSTGRES_PASSWORD": s.postgres_password,
+        "NEO4J_PASSWORD": s.neo4j_password,
+        "SQL_AGENT_DB_PASSWORD": s.sql_agent_db_password.get_secret_value(),
+    }
+    problems = [
+        f"{name} is still the default from .env.example."
+        for name, value in current.items()
+        if value == DEFAULT_SECRETS[name]
+    ]
+    if not s.auth_cookie_secure:
+        problems.append("AUTH_COOKIE_SECURE must be true (production is served over https).")
+    if not s.frontend_origin.startswith("https://") or "localhost" in s.frontend_origin:
+        problems.append("FRONTEND_ORIGIN must be the site's https URL, not localhost.")
+    if s.openai_api_key is None:
+        problems.append("OPENAI_API_KEY is not set.")
+    if s.mcp_notes_dir:
+        problems.append("MCP_NOTES_DIR is dev only: it lets every user's assistant read that folder.")
+    return problems
 
 
 @lru_cache

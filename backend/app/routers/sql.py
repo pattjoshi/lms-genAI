@@ -13,6 +13,7 @@ from pydantic import BaseModel, Field
 
 from app import schema
 from app.auth import CurrentUser, SessionDep
+from app.llm import user_limits
 from app.sql_agent import agent
 from app.sql_agent.access import AGENT_TABLES
 from app.sql_agent.describe import scope_summary
@@ -47,6 +48,7 @@ async def scope(user: CurrentUser):
 @router.post("/ask")
 async def ask(body: Ask, session: SessionDep, user: CurrentUser):
     _not_ready()
+    await user_limits.check_and_record(session, user, "sql")
     out = await agent.ask(session, user, body.question.strip())
     await session.commit()
     return out

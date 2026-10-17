@@ -158,7 +158,7 @@ async def _invoke(session, runnable, messages, feature, user, session_id, *, raw
     settings = get_settings()
     model_name = model_name or settings.openai_chat_model
     openai_breaker.before_call()
-    await ensure_budget_available(session, settings)
+    await ensure_budget_available(session, settings, user)
 
     config = {
         "callbacks": langfuse_callbacks(settings),
@@ -253,7 +253,7 @@ async def chat_stream(
     """
     settings = get_settings()
     openai_breaker.before_call()
-    await ensure_budget_available(session, settings)
+    await ensure_budget_available(session, settings, user)
     model = build_chat_model(settings, max_tokens, streaming=True)
     stats.model = settings.openai_chat_model
     config = {
@@ -360,7 +360,7 @@ async def embed_texts(session: AsyncSession, texts: list[str], *, feature: str, 
         return result
     _require_key(settings)
     openai_breaker.before_call()
-    await ensure_budget_available(session, settings)
+    await ensure_budget_available(session, settings, user)
 
     client = AsyncOpenAI(
         api_key=settings.openai_api_key.get_secret_value(),

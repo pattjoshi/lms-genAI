@@ -68,6 +68,8 @@ UPGRADES = [
     "ALTER TABLE doubts ADD COLUMN IF NOT EXISTS trace_id VARCHAR(64)",
     "ALTER TABLE llm_usage ADD COLUMN IF NOT EXISTS trace_id VARCHAR(64)",
     "CREATE INDEX IF NOT EXISTS ix_llm_usage_created_at ON llm_usage (created_at)",
+    # Per-user AI limits (the new ai_requests table is created by create_all): today's spend per student
+    "CREATE INDEX IF NOT EXISTS ix_llm_usage_user_created ON llm_usage (user_id, created_at)",
 ]
 
 
