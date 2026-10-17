@@ -1,11 +1,11 @@
-# Runs on every pull request and on pushes to main: backend lint + tests against real databases,
+# Runs on every pull request and on pushes to development: backend lint + tests against real databases,
 # and a frontend type check + production build.
 name: CI
 
 on:
   pull_request:
   push:
-    branches: [main]
+    branches: [development]
 
 concurrency:
   group: ci-${{ github.ref }}
