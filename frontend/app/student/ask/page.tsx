@@ -15,6 +15,7 @@ import {
   MessageSquarePlus,
   Microscope,
   Send,
+  ShieldAlert,
   ShieldCheck,
   Sparkles,
   ThumbsDown,
@@ -71,7 +72,7 @@ type Details = {
 };
 
 type Done = {
-  status: "answered" | "no_context";
+  status: "answered" | "no_context" | "blocked";
   intent: string | null;
   confidence: "high" | "medium" | "low" | null;
   model: string | null;
@@ -107,8 +108,43 @@ type Turn = {
   tools?: ToolStep[];
   details?: Details;
   done?: Done;
+  guard?: GuardInfo[];
   error?: { code: string; message: string };
 };
+
+// Phase 7: what the guardrails did. Input: the message was refused before any search. Output: the answer
+// was written, but a code check found a problem with it (it is also in the admin's guardrail log).
+type GuardInfo = { stage: "input" | "output"; kind?: string; method?: string; reason?: string; flags?: string[] };
+
+const GUARD_KIND: Record<string, string> = { off_topic: "off topic", injection: "prompt injection" };
+const GUARD_METHOD: Record<string, string> = { rules: "matched a rule", llm: "AI classifier" };
+const OUTPUT_FLAG: Record<string, string> = {
+  invalid_citation: "it cites a source number that doesn't exist",
+  uncited: "most of its sentences cite no source",
+  prompt_leak: "it repeats the assistant's hidden instructions",
+  email: "it contains someone's email address",
+};
+
+function GuardLine({ guard }: { guard: GuardInfo }) {
+  if (guard.stage === "input") {
+    return (
+      <div className="mb-2 flex flex-wrap items-center gap-1.5 text-[11px] text-faint" title={guard.reason}>
+        <ShieldAlert className="h-3 w-3 text-warn" />
+        <span className="font-medium text-muted">Guardrail · {GUARD_KIND[guard.kind ?? ""] ?? guard.kind}</span>
+        <span>· {GUARD_METHOD[guard.method ?? ""] ?? guard.method}</span>
+        {guard.reason && guard.method === "llm" && <span>· “{guard.reason}”</span>}
+      </div>
+    );
+  }
+  return (
+    <p className="mt-2 flex items-start gap-1.5 text-xs text-warn">
+      <ShieldAlert className="mt-px h-3.5 w-3.5 shrink-0" />
+      <span>
+        Check this answer against the sources: {(guard.flags ?? []).map((f) => OUTPUT_FLAG[f] ?? f).join(", ")}.
+      </span>
+    </p>
+  );
+}
 
 type HistoryItem = { id: number; question: string; status: string; created_at: string };
 type ScopeCourse = { id: number; code: string; title: string; modules: { id: number; position: number; title: string }[] };
@@ -392,6 +428,7 @@ function TurnView({
         </span>
         <div className="min-w-0 flex-1 space-y-3">
           <div className="rounded-2xl rounded-tl-md border border-line bg-surface px-4 py-3">
+            {turn.guard?.filter((g) => g.stage === "input").map((g, i) => <GuardLine key={i} guard={g} />)}
             {turn.route && <RouteLine route={turn.route} />}
             {turn.tools && <ToolSteps steps={turn.tools} />}
             {turn.answer ? (
@@ -399,7 +436,7 @@ function TurnView({
             ) : (
               <p className="text-sm text-muted">
                 {!turn.route
-                  ? "Reading your message…"
+                  ? "Checking your message…"
                   : turn.route.intent !== "doubt" && !turn.route.fallback
                     ? "Working on it…"
                     : turn.details
@@ -416,6 +453,7 @@ function TurnView({
                 </span>
               </p>
             )}
+            {turn.guard?.filter((g) => g.stage === "output").map((g, i) => <GuardLine key={i} guard={g} />)}
             {turn.details?.rewritten && !showDetails && (
               <p className="mt-2 text-xs text-faint">Understood as: “{turn.details.query}”</p>
             )}
@@ -439,7 +477,7 @@ function TurnView({
 
           {showDetails && turn.details && <DetailsPanel details={turn.details} numbered={numbered} />}
 
-          {turn.done?.doubt_id && <Feedback doubtId={turn.done.doubt_id} ticket={turn.done.ticket ?? null} />}
+          {turn.done?.doubt_id && turn.done.status !== "blocked" && <Feedback doubtId={turn.done.doubt_id} ticket={turn.done.ticket ?? null} />}
 
           {turn.done && (
             <div className="flex flex-wrap gap-1.5">
@@ -635,6 +673,7 @@ function AskDoubt() {
           if (event === "route") update((t) => ({ ...t, route: data }));
           else if (event === "card") update((t) => ({ ...t, cards: [...(t.cards ?? []), data] }));
           else if (event === "tool") update((t) => ({ ...t, tools: [...(t.tools ?? []), data] }));
+          else if (event === "guardrail") update((t) => ({ ...t, guard: [...(t.guard ?? []), data] }));
           else if (event === "sources") update((t) => ({ ...t, sources: data.sources, details: data.retrieval }));
           else if (event === "token") update((t) => ({ ...t, answer: t.answer + data.text }));
           else if (event === "done") update((t) => ({ ...t, done: data }));

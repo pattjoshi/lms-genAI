@@ -19,6 +19,7 @@ from sqlalchemy.ext.asyncio import AsyncSession
 
 from app.config import Settings
 from app.llm.errors import DailyBudgetExceededError
+from app.llm.tracing import current_trace_id
 from app.models import LLMUsage
 
 log = logging.getLogger(__name__)
@@ -57,9 +58,10 @@ async def ensure_budget_available(session: AsyncSession, settings: Settings) -> 
 
 
 async def record_usage(session: AsyncSession, **fields) -> None:
-    """Write one usage row. Never let bookkeeping break the user's request."""
+    """Write one usage row. Never let bookkeeping break the user's request.
+    Phase 7: the row keeps the Langfuse trace id, so the dashboard links each call to its trace."""
     try:
-        session.add(LLMUsage(**fields))
+        session.add(LLMUsage(**{"trace_id": current_trace_id(), **fields}))
         await session.commit()
     except Exception:  # noqa: BLE001
         await session.rollback()

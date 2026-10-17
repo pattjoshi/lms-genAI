@@ -1,12 +1,14 @@
 """The chat agent as a LangGraph state machine (Phase 4).
 
-    START ─▶ memory ─▶ route ─┬─▶ doubt ─────────────▶ END     RAG answer with citations (Phase 1-2)
-                              ├─▶ learning_path ─┬───▶ END     study order (Phase 3)
-                              │                  └─▶ doubt     no such concept: answer the question instead
-                              ├─▶ practice ──────────▶ END     3 checked practice questions
-                              ├─▶ progress ──────────▶ END     weak topics from memory
-                              ├─▶ support ───────────▶ END     own login / payment records
-                              └─▶ assistant ─────────▶ END     tool-calling loop over our MCP tools (4b)
+    START ─▶ guard ─┬─▶ END                                     refused: injection / off topic (Phase 7)
+                    ▼
+                  memory ─▶ route ─┬─▶ doubt ──────────▶ END     RAG answer with citations (Phase 1-2)
+                                   ├─▶ learning_path ─┬─▶ END     study order (Phase 3)
+                                   │                  └─▶ doubt   no such concept: answer the question instead
+                                   ├─▶ practice ───────▶ END     3 checked practice questions
+                                   ├─▶ progress ───────▶ END     weak topics from memory
+                                   ├─▶ support ────────▶ END     own login / payment records
+                                   └─▶ assistant ──────▶ END     tool-calling loop over our MCP tools (4b)
 
 Why a fixed graph and not a free "ReAct" agent that picks tools in a loop: every path here is known,
 so a graph is cheaper (no LLM call to decide what to do next), faster, testable node by node, and it
@@ -15,7 +17,11 @@ method first. Only open, multi-step requests go to the `assistant` branch (Phase
 tool-calling loop whose tools come from our own MCP server (app/agent/assistant.py).
 
 Nodes talk to the browser through LangGraph's stream writer: each `emit(event, data)` becomes one
-Server-Sent Event (route, sources, token, card), and chat.py adds `done` at the end.
+Server-Sent Event (route, sources, token, card, guardrail), and chat.py adds `done` at the end.
+
+Phase 7: the `guard` node (app/guardrails/input.py) runs before anything else, so a refused message costs
+no search, no routing and no ticket. Its embedding of the message is handed to the router. After a course
+answer has streamed, the doubt node runs the output checks (app/guardrails/output.py).
 """
 
 from typing import Any, TypedDict
@@ -33,6 +39,9 @@ from app.agent.memory import WeakTopic, remember, weak_topics
 from app.agent.router import Route, route
 from app.config import get_settings
 from app.graph import study
+from app.guardrails import log as guard_log
+from app.guardrails.input import Verdict, check_input
+from app.guardrails.output import check_answer
 from app.llm.service import StreamStats, chat_stream
 from app.models import Course, Doubt, Role, User
 from app.prompts.rag_answer import NO_ANSWER
@@ -51,6 +60,8 @@ class ChatState(TypedDict, total=False):
     history: list[tuple[str, str]]
     doubt: Doubt  # the row saved for this message; nodes fill it in
     # filled by nodes
+    guard: Verdict
+    guard_events: list  # GuardrailEvent rows, saved by chat.py once the doubt has an id
     weak: list[WeakTopic]
     route: Route
     fallback: str | None
@@ -71,6 +82,23 @@ def say(text: str) -> None:
 # ---------------------------------------------------------------------------
 
 
+async def guard_node(state: ChatState) -> dict:
+    session, user, question, doubt = state["session"], state["user"], state["question"], state["doubt"]
+    verdict = await check_input(session, user, question)
+    doubt.checks = {"input": verdict.out()}
+    out: dict = {"guard": verdict, "usage": {"cost_usd": verdict.cost_usd}}
+    if verdict.allowed:
+        return out
+    doubt.intent, doubt.status, doubt.answer = "guardrail", "blocked", verdict.reply
+    emit("guardrail", {"stage": "input", "kind": verdict.kind, "method": verdict.method, "reason": verdict.reason})
+    say(verdict.reply)
+    return {**out, "guard_events": [guard_log.input_event(user, question, verdict, "chat")]}
+
+
+def after_guard(state: ChatState) -> str:
+    return "memory" if state["guard"].allowed else END
+
+
 async def load_memory(state: ChatState) -> dict:
     user = state["user"]
     weak = await weak_topics(state["session"], user) if user.role == Role.student else []
@@ -78,11 +106,14 @@ async def load_memory(state: ChatState) -> dict:
 
 
 async def route_node(state: ChatState) -> dict:
-    r = await route(state["session"], state["user"], state["question"])
+    guard = state.get("guard")
+    r = await route(state["session"], state["user"], state["question"], vector=guard.vector if guard else None)
     state["doubt"].intent = r.intent.value
     state["doubt"].route = r.out()
     emit("route", r.out())
-    return {"route": r, "usage": {"cost_usd": r.cost_usd}}
+    usage = dict(state.get("usage") or {})
+    usage["cost_usd"] = usage.get("cost_usd", 0.0) + r.cost_usd
+    return {"route": r, "usage": usage}
 
 
 def pick_branch(state: ChatState) -> str:
@@ -284,6 +315,16 @@ async def doubt_node(state: ChatState) -> dict:
             doubt.answer = answer or None
         doubt.status = "no_context" if answer.strip().startswith(NO_ANSWER) else "answered"
     doubt.answer = answer
+    doubt.first_token_ms = stats.first_token_ms or None
+
+    # Output guardrail: the student has read the answer already, so a problem is shown and logged.
+    events = []
+    if used:
+        checks = check_answer(answer, len(used), user.email)
+        doubt.checks = {**(doubt.checks or {}), "output": checks}
+        if checks["flags"]:
+            emit("guardrail", {"stage": "output", "flags": checks["flags"], "checks": checks})
+            events = guard_log.output_events(user, answer, checks, "chat")
 
     usage = dict(state.get("usage") or {})
     usage.update(
@@ -299,7 +340,7 @@ async def doubt_node(state: ChatState) -> dict:
         relevance=retrieval.relevance(),
         confidence=confidence(retrieval.relevance()) if used else None,
     )
-    return {"usage": usage}
+    return {"usage": usage, "guard_events": events}
 
 
 # ---------------------------------------------------------------------------
@@ -309,6 +350,7 @@ async def doubt_node(state: ChatState) -> dict:
 
 def build_graph():
     g = StateGraph(ChatState)
+    g.add_node("guard", guard_node)
     g.add_node("memory", load_memory)
     g.add_node("route", route_node)
     g.add_node("doubt", doubt_node)
@@ -317,7 +359,8 @@ def build_graph():
     g.add_node("progress", progress_node)
     g.add_node("support", support_node)
     g.add_node("assistant", assistant_node)
-    g.add_edge(START, "memory")
+    g.add_edge(START, "guard")
+    g.add_conditional_edges("guard", after_guard, {"memory": "memory", END: END})
     g.add_edge("memory", "route")
     g.add_conditional_edges("route", pick_branch, {i.value: i.value for i in Intent})
     g.add_conditional_edges("learning_path", after_path, {"doubt": "doubt", END: END})

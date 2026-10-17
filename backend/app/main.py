@@ -38,6 +38,7 @@ from app.routers import (
     learning,
     portal,
     practice,
+    quality,
     quizzes,
     sql,
     tickets,
@@ -146,6 +147,7 @@ for r in (
     tokens.router,
     tickets.router,
     sql.router,
+    quality.router,
 ):
     app.include_router(r)
 

@@ -38,6 +38,8 @@ function formatDate(v: string) {
 }
 
 function compact(v: number) {
+  // Small values (e.g. a day's AI cost in USD) would all round to "0" with one decimal.
+  if (v !== 0 && Math.abs(v) < 1) return v.toLocaleString("en-US", { maximumSignificantDigits: 2 });
   return v.toLocaleString("en-US", { notation: "compact", maximumFractionDigits: 1 });
 }
 
