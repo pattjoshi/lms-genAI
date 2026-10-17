@@ -18,7 +18,7 @@ from sqlalchemy.exc import OperationalError, ProgrammingError
 from starlette.exceptions import HTTPException
 
 from app import models  # noqa: F401 - registers all tables
-from app.config import get_settings
+from app.config import get_settings, production_problems
 from app.db import engine
 from app.graph import store as graph_store
 from app.llm.errors import LLMError
@@ -98,6 +98,13 @@ async def _check_search_index() -> None:
 
 @asynccontextmanager
 async def lifespan(_: FastAPI):
+    if problems := production_problems(settings):
+        # Refuse to start rather than run a production server with demo passwords or insecure cookies.
+        raise RuntimeError(
+            "Not safe to run with APP_ENV=production:\n  - "
+            + "\n  - ".join(problems)
+            + "\nFix these in the server's environment, or set APP_ENV=dev for local development."
+        )
     init_tracing(settings)
     # Create new tables and add new columns (existing data is untouched).
     # Best effort: if a database is down, /health shows it and the app still starts.
