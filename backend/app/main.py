@@ -38,11 +38,13 @@ from app.routers import (
     learning,
     portal,
     practice,
+    public,
     quality,
     quizzes,
     sql,
     tickets,
     tokens,
+    users,
 )
 from app.schema import ensure_schema
 from app.sql_agent import run as sql_runner
@@ -128,13 +130,36 @@ app = FastAPI(title="LMS GenAI", version="0.1.0", lifespan=lifespan)
 app.add_middleware(
     CORSMiddleware,
     allow_origins=[settings.frontend_origin],
+    allow_credentials=True,  # the browser sends the session cookie with the frontend's requests
     allow_methods=["*"],
     allow_headers=["*"],
 )
 
+UNSAFE_METHODS = {"POST", "PUT", "PATCH", "DELETE"}
+
+
+@app.middleware("http")
+async def same_origin_writes(request: Request, call_next):
+    """CSRF guard: a request that changes something must come from our frontend (or the API docs page).
+
+    Browsers always send `Origin` on cross-site POSTs, and a page can't fake it. With the session in a
+    cookie, this stops another site from submitting a form to our API in a signed-in user's name.
+    Requests without an Origin (curl, MCP clients, tests) don't carry the browser's cookie anyway."""
+    origin = request.headers.get("origin")
+    if request.method in UNSAFE_METHODS and origin and not request.url.path.startswith("/mcp"):
+        own = f"{request.url.scheme}://{request.url.netloc}"
+        if origin not in (settings.frontend_origin, own):
+            return JSONResponse(
+                status_code=403, content={"error": "bad_origin", "message": "Requests must come from the LMS site."}
+            )
+    return await call_next(request)
+
+
 for r in (
     health.router,
     auth.router,
+    public.router,
+    users.router,
     portal.router,
     data.router,
     ai.router,
@@ -151,23 +176,26 @@ for r in (
 ):
     app.include_router(r)
 
-# Phase 4b: the MCP server (Streamable HTTP). Its own auth: personal access tokens, not X-User-Id.
+# Phase 4b: the MCP server (Streamable HTTP). Its own auth: personal access tokens, not the session cookie.
 app.router.add_route("/mcp", mcp_endpoint(), include_in_schema=False)
 
 
 # --- Error handling: every error leaves the API as {"error": code, "message": text} ---
 
 
-def _error(status: int, code: str, message: str, detail: str | None = None) -> JSONResponse:
+def _error(
+    status: int, code: str, message: str, detail: str | None = None, headers: dict[str, str] | None = None
+) -> JSONResponse:
     body = {"error": code, "message": message}
     if detail and settings.app_env == "dev":
         body["detail"] = detail  # technical info only in dev, never in production
-    return JSONResponse(status_code=status, content=body)
+    return JSONResponse(status_code=status, content=body, headers=headers)
 
 
 @app.exception_handler(HTTPException)
 async def http_error(_: Request, exc: HTTPException):
-    return _error(exc.status_code, f"http_{exc.status_code}", str(exc.detail))
+    # headers: e.g. Retry-After on a login lockout
+    return _error(exc.status_code, f"http_{exc.status_code}", str(exc.detail), headers=exc.headers)
 
 
 @app.exception_handler(RequestValidationError)

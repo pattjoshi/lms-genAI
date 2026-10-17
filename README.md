@@ -7,6 +7,7 @@ guardrails and tracing.
 - What we're building and why: [PLAN.md](PLAN.md)
 - What you learn in each phase: [docs/](docs/) (start with [docs/phase-0.md](docs/phase-0.md); Phase 7: [docs/phase-7.md](docs/phase-7.md))
 - The planted "stories" in the dummy data: [data/seed_stories.md](data/seed_stories.md)
+- Sign-in, roles, your first admin and Google login: [docs/auth.md](docs/auth.md)
 - Interview prep per phase (approach, alternatives, cross-questions): [docs/interview/](docs/interview/)
 
 **Current phase: 7 (evaluation, guardrails, tracing), done.** One command, `uv run python -m app.evals.answers`,
@@ -163,11 +164,19 @@ npm install
 npm run dev
 ```
 
-Open <http://localhost:3000>.
+Open <http://localhost:3000>: the public home page. **Log in** → open **Demo accounts** to use the seeded
+users (dev only), or create your own account. To make your own admin:
+
+```powershell
+cd backend
+uv run python -m app.accounts create-admin --email you@example.com --name "Your Name"
+```
+
+Details, Google sign-in and production settings: [docs/auth.md](docs/auth.md).
 
 ### 6. Try it
 
-1. On the login page all 5 status dots should be green (Postgres, Qdrant, Neo4j, OpenAI key, Langfuse).
+1. On the login page, open **Demo accounts**: all 5 status dots should be green (Postgres, Qdrant, Neo4j, OpenAI key, Langfuse).
 2. Log in as **Riya Sharma**: her weakest topics are Backpropagation and Chain Rule.
 3. Click **Send** in "AI connection test": you get a reply plus tokens, cost, latency and attempts.
 4. Click **Run request** in the permission test: refused (students can't list students).

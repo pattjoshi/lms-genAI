@@ -15,6 +15,7 @@ import {
   ShieldCheck,
   Ticket,
   Upload,
+  UsersRound,
   type LucideIcon,
 } from "lucide-react";
 
@@ -55,6 +56,7 @@ export const NAV: Record<Role, NavItem[]> = {
   ],
   admin: [
     { label: "Dashboard", icon: LayoutDashboard, href: "/admin" },
+    { label: "Users & roles", icon: UsersRound, href: "/admin/users" },
     { label: "Tickets", icon: Inbox, href: "/admin/tickets" },
     { label: "MCP access", icon: Plug, href: "/admin/mcp" },
     { label: "Ask the data", icon: ChartColumn, href: "/admin/data" },
