@@ -4,6 +4,9 @@ An AI learning assistant for an LMS, built phase by phase to **learn GenAI**: RA
 graph databases, query rewriting and routing, agents, human-in-the-loop, evaluation,
 guardrails and tracing.
 
+<img width="935" height="438" alt="image" src="https://github.com/user-attachments/assets/4638e2e2-9b42-45cc-8766-cfded949bedb" />
+
+
 - What we're building and why: [PLAN.md](PLAN.md)
 - What you learn in each phase: [docs/](docs/) (start with [docs/phase-0.md](docs/phase-0.md); Phase 7: [docs/phase-7.md](docs/phase-7.md))
 - The planted "stories" in the dummy data: [data/seed_stories.md](data/seed_stories.md)
