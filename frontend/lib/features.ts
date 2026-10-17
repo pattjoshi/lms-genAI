@@ -21,7 +21,7 @@ import {
 import type { Role } from "./session";
 
 // Phase whose features are built. Roadmap items up to this phase show as "Live".
-export const CURRENT_PHASE = 6;
+export const CURRENT_PHASE = 7;
 
 // href = page exists; phase = arrives in that phase (greyed out until then)
 export type NavItem = { label: string; icon: LucideIcon; href?: string; phase?: number };
@@ -58,7 +58,7 @@ export const NAV: Record<Role, NavItem[]> = {
     { label: "Tickets", icon: Inbox, href: "/admin/tickets" },
     { label: "MCP access", icon: Plug, href: "/admin/mcp" },
     { label: "Ask the data", icon: ChartColumn, href: "/admin/data" },
-    { label: "AI quality & cost", icon: Gauge, phase: 7 },
+    { label: "AI quality & cost", icon: Gauge, href: "/admin/quality" },
   ],
 };
 
@@ -80,6 +80,7 @@ export const ROADMAP: Record<Role, Feature[]> = {
     { id: "S6", name: "👍 / 👎 feedback, 👎 creates a ticket", phase: 5 },
     { id: "S19", name: "See your tickets and support's answers", phase: 5 },
     { id: "S16", name: "Ask about your own data in plain English", phase: 6 },
+    { id: "S8", name: "Off-topic questions politely refused", phase: 7 },
   ],
   teacher: [
     { id: "T1", name: "Upload HTML, DOC, PDF, TXT", phase: 1 },
@@ -111,5 +112,7 @@ export const ROADMAP: Record<Role, Feature[]> = {
     { id: "A4", name: "Token cost dashboard", phase: 7 },
     { id: "A5", name: "Latency dashboard", phase: 7 },
     { id: "A6", name: "Answer quality dashboard", phase: 7 },
+    { id: "A8", name: "Run the eval set and compare versions", phase: 7 },
+    { id: "A9", name: "Guardrail log", phase: 7 },
   ],
 };

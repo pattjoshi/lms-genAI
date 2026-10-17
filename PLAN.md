@@ -45,7 +45,7 @@ a pause so you can understand it before the next one.
 | 4 ✅ | **Routing + agent + MCP** | Intent routing (rules vs embeddings vs LLM), tool calling, LangGraph state machine, short/long-term memory, confidence scoring. **MCP:** tools / resources / prompts, stdio vs Streamable HTTP, token auth, tool annotations, MCP security (tool poisoning, prompt injection in tool results, confused deputy). Our LMS is an MCP **server**; our agent is an MCP **client** of it | Each question goes to the right tool; decisions visible in traces; MCP Inspector and Claude Desktop can call our tools, and a student's token is refused for staff-only tools |
 | 5 ✅ | **Tickets + feedback loop** | Human in the loop, context packaging, knowledge feedback, clustering questions with embeddings | A resolved ticket's answer is used by the AI next time |
 | 6 ✅ | **SQL agent (all roles, scoped)** | Schema-aware prompting, few-shot, self-correction loop, SELECT-only validation, read-only DB user, row-level security, chart choice | Plain English → SQL → answer + chart; can't write; can't escape scope |
-| 7 | **Evaluation, guardrails, tracing** | RAG metrics (context precision/recall, faithfulness, relevance), LLM-as-judge and its biases, injection & off-topic guardrails, cost/latency dashboards | One command runs the eval and shows better/worse |
+| 7 ✅ | **Evaluation, guardrails, tracing** | RAG metrics (context precision/recall, faithfulness, relevance), LLM-as-judge and its biases, injection & off-topic guardrails, cost/latency dashboards | One command runs the eval and shows better/worse |
 
 **Phase 1 note:** the enrolled-course filter on retrieval is already in Phase 1, because it is a
 **security** rule (students must never see other courses' material), not a feature. Phase 2 adds the
@@ -99,6 +99,20 @@ policies are generated from the permission matrix, which gained two rows (accoun
 **Deviation:** the policies don't read a session setting (`SET app.user_id`), because LLM-written SQL could
 change it with `set_config`; the app writes the asker into `sql_agent_scope` keyed by the reader connection's
 `pg_backend_pid()`, which a query can't change. MCP gets the same agent as `ask_data`.
+
+**Phase 7 note (done, one part):** `python -m app.evals.answers` runs `evals/answer_questions.yaml` (22 graded
+questions, 3 uncovered, 4 off topic, 4 injections, 2 planted judge checks) through guardrail → retrieval → answer,
+scores context precision/recall (from the labels), faithfulness, relevance and correctness (LLM judge, claim by
+claim, evidence checked in code), saves the run (`eval_runs` + JSON) and compares it with the previous one
+(better / worse / same past a margin, plus the questions that got worse); `--set KEY=VALUE` tries a setting
+without editing `.env`. Guardrails (S8, A9): an input check before routing (injection rules → embedding
+similarity that may only *allow* → a small LLM classifier; fails open, since it is layer 1) and code-only output
+checks (citations, coverage, prompt leak, emails) on every course answer, logged in `guardrail_events`; MCP
+`ask_doubt` runs the same checks. Dashboards (A4-A9): `/admin/quality` from our own tables, Langfuse trace ids
+on every usage row and chat message. **Deviations:** context precision/recall come from topic labels, not an
+LLM (free, stable; each reference comes from one topic); output checks warn instead of blocking in the streamed
+chat (the student has already read the text); the SQL agent isn't behind the input guardrail (it has its own
+layers, and Phase 6's injection demo still shows layer 3); evals are run from the command line, not from the UI.
 
 **Phase 4 note (MCP):** every LMS capability is written **once**, as a tool on our MCP server.
 External MCP clients (Claude Desktop, Cursor, VS Code, MCP Inspector) call it over Streamable HTTP or
@@ -303,7 +317,8 @@ backend/            FastAPI app (uv project)
     prompts/        every prompt, one file per feature
     ingest/         parse -> chunk -> embed -> tag -> index (Phase 1); reindex (Phase 2)
     rag/            Qdrant access, BM25 vectors, RRF, reranker, query rewriting, retriever (Phase 1-2)
-    evals/          retrieval eval (python -m app.evals.retrieval [--compare])
+    evals/          retrieval eval (python -m app.evals.retrieval [--compare]); answer eval (python -m app.evals.answers)
+    guardrails/     input check (injection, off topic), output checks, guardrail log (Phase 7)
     graph/          Neo4j concept graph + learning paths (Phase 3)
     agent/          LangGraph router + agent, MCP client (Phase 4)
     mcp_server/     MCP server: tools, resources, prompts, token auth (Phase 4)
@@ -318,7 +333,7 @@ data/
   course_source/    course content as markdown (64 topics, with prerequisites)
   course_files/     the same content as 6 PDF, 6 DOCX, 6 HTML, 6 TXT files
   seed_stories.md   planted facts in the seed data
-evals/              attack questions, retrieval questions
+evals/              attack questions, retrieval questions, answer questions (Phase 7)
 docs/               learning notes per phase
 docker-compose.yml  Postgres, Qdrant, Neo4j
 ```
