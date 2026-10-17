@@ -142,3 +142,48 @@ def trace(name: str, user: User | None, feature: str, input=None, session_id: st
                 attrs.__exit__(None, None, None)
             except Exception:  # noqa: BLE001
                 log.debug("Could not close trace attributes", exc_info=True)
+
+
+# ---------------------------------------------------------------------------
+# Phase 7: links from the app to Langfuse, and scores on traces
+# ---------------------------------------------------------------------------
+
+_trace_url_prefix: str | None = None
+
+
+def current_trace_id() -> str | None:
+    """The Langfuse trace the code is running inside (None without tracing). Saved with each usage row
+    and chat message, so the dashboard can link a slow or expensive call to its trace."""
+    if _client is None:
+        return None
+    try:
+        return _client.get_current_trace_id()
+    except Exception:  # noqa: BLE001
+        return None
+
+
+def trace_url(trace_id: str | None) -> str | None:
+    """Link to a trace in the Langfuse UI. The project id is looked up once (one API call), then cached."""
+    global _trace_url_prefix
+    if _client is None or not trace_id:
+        return None
+    if _trace_url_prefix is None:
+        try:
+            url = _client.get_trace_url(trace_id="TRACE")
+        except Exception:  # noqa: BLE001
+            log.debug("Could not build a Langfuse trace URL", exc_info=True)
+            return None
+        if not url:
+            return None
+        _trace_url_prefix = url.removesuffix("TRACE")
+    return _trace_url_prefix + trace_id
+
+
+def score(trace_id: str | None, name: str, value: float, comment: str | None = None) -> None:
+    """Attach a score (e.g. faithfulness from the eval) to a trace, so Langfuse can chart it."""
+    if _client is None or not trace_id:
+        return
+    try:
+        _client.create_score(name=name, value=value, trace_id=trace_id, comment=comment)
+    except Exception:  # noqa: BLE001
+        log.debug("Could not send score %s", name, exc_info=True)

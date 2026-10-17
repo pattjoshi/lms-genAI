@@ -18,6 +18,10 @@ Phase 5: before `done`, a message that needs a person (no answer, low confidence
 problem) opens a ticket for support (app/tickets/service.py), and `done` says which. The student can
 also rate any answer (POST /chat/doubts/{id}/feedback); a 👎 opens a ticket too.
 
+Phase 7: the graph starts with a guardrail. A refused message (prompt injection, off topic) gets a fixed
+reply, a `guardrail` event, status "blocked" and no ticket; a flagged course answer gets a `guardrail` event
+after its tokens. Both go into the guardrail log. Each doubt keeps its Langfuse trace id for the dashboard.
+
 Phase 2: a doubt belongs to a conversation (`conversation_id`, made by the browser and
 renewed by "New chat"). The last RAG_HISTORY_TURNS doubts of the same conversation are
 loaded HERE, from the database, not sent by the browser, so a client can't inject a
@@ -39,7 +43,7 @@ from app.auth import CurrentUser, SessionDep
 from app.config import get_settings
 from app.db import SessionLocal
 from app.llm.errors import LLMError
-from app.llm.tracing import trace
+from app.llm.tracing import current_trace_id, trace
 from app.models import Course, Doubt, Module, Ticket, User
 from app.rag.vectorstore import IndexOutdated
 from app.scopes import readable_course_ids
@@ -83,6 +87,7 @@ async def _answer_stream(user_id: int, question: str, body: AskIn):
         state: dict = {}
         try:
             with trace("chat", user, "doubt", input={"question": question}, session_id=body.conversation_id) as root:
+                doubt.trace_id = current_trace_id()
                 inputs = {
                     "session": session,
                     "user": user,
@@ -108,6 +113,9 @@ async def _answer_stream(user_id: int, question: str, body: AskIn):
             doubt.latency_ms = int((time.perf_counter() - started) * 1000)
             doubt.confidence = usage.get("confidence")
             ticket = await _auto_ticket(session, doubt, body.course_id)
+            for event in state.get("guard_events") or []:
+                event.doubt_id = doubt.id
+                session.add(event)
             yield sse(
                 "done",
                 {
@@ -125,6 +133,7 @@ async def _answer_stream(user_id: int, question: str, body: AskIn):
                     "top_score": usage.get("top_score"),
                     "relevance": usage.get("relevance"),
                     "confidence": usage.get("confidence"),
+                    "checks": doubt.checks,
                     "doubt_id": doubt.id,
                     "ticket": ticket,
                 },

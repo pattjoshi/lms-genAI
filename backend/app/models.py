@@ -259,6 +259,7 @@ class LLMUsage(Base):
     attempts: Mapped[int] = mapped_column(Integer, default=1, comment="1 = no retries were needed")
     status: Mapped[str] = mapped_column(String(20), comment="success | error")
     error_code: Mapped[str | None] = mapped_column(String(60))
+    trace_id: Mapped[str | None] = mapped_column(String(64), comment="Langfuse trace of the request (Phase 7)")
 
 
 # ---------------------------------------------------------------------------
@@ -355,7 +356,7 @@ class Doubt(Base):
     student_id: Mapped[int] = mapped_column(ForeignKey("users.id"))
     question: Mapped[str] = mapped_column(Text)
     answer: Mapped[str | None] = mapped_column(Text)
-    status: Mapped[str] = mapped_column(String(20), comment="answered | no_context | error")
+    status: Mapped[str] = mapped_column(String(20), comment="answered | no_context | blocked (guardrail) | error")
     top_score: Mapped[float | None] = mapped_column(
         Float, comment="Best retrieval similarity; low = likely content gap"
     )
@@ -390,6 +391,12 @@ class Doubt(Base):
     question_vec: Mapped[list | None] = mapped_column(
         JSON, comment="Embedding of the question, filled when needed (teacher insights: grouping by meaning)"
     )
+    # Phase 7: guardrails and tracing
+    checks: Mapped[dict | None] = mapped_column(
+        JSON, comment="Guardrail results: the input verdict and, for course answers, the output checks (citations)"
+    )
+    first_token_ms: Mapped[int | None] = mapped_column(Integer, comment="Time to the first streamed answer token")
+    trace_id: Mapped[str | None] = mapped_column(String(64), comment="Langfuse trace of this message")
 
 
 # ---------------------------------------------------------------------------
@@ -556,3 +563,47 @@ class SqlQuery(Base):
     cost_usd: Mapped[float] = mapped_column(Float, default=0.0)
     latency_ms: Mapped[int] = mapped_column(Integer, default=0)
     created_at: Mapped[datetime] = mapped_column(DateTime(timezone=True), server_default=func.now(), index=True)
+
+
+# ---------------------------------------------------------------------------
+# Phase 7: guardrails and evaluation
+# ---------------------------------------------------------------------------
+
+
+class GuardrailEvent(Base):
+    __tablename__ = "guardrail_events"
+    __table_args__ = {
+        "comment": "Guardrail log: a message refused before answering (prompt injection, off topic) or an answer "
+        "flagged after it (bad citation, prompt leak, someone's email). Messages that pass are not logged."
+    }
+
+    id: Mapped[int] = mapped_column(primary_key=True)
+    created_at: Mapped[datetime] = mapped_column(DateTime(timezone=True), server_default=func.now(), index=True)
+    user_id: Mapped[int | None] = mapped_column(ForeignKey("users.id"), index=True)
+    doubt_id: Mapped[int | None] = mapped_column(ForeignKey("doubts.id", ondelete="SET NULL"))
+    surface: Mapped[str] = mapped_column(String(10), comment="chat | mcp")
+    stage: Mapped[str] = mapped_column(String(10), comment="input (before answering) | output (after)")
+    kind: Mapped[str] = mapped_column(
+        String(20), comment="injection | off_topic | prompt_leak | email | invalid_citation | uncited"
+    )
+    action: Mapped[str] = mapped_column(String(10), comment="blocked (not answered) | flagged (answered, marked)")
+    method: Mapped[str] = mapped_column(String(20), comment="rules | llm | code")
+    text: Mapped[str] = mapped_column(Text, comment="The message (cut to 500 characters)")
+    detail: Mapped[dict] = mapped_column(JSON, default=dict, comment="Rule that fired, LLM reason, citations...")
+
+
+class EvalRun(Base):
+    __tablename__ = "eval_runs"
+    __table_args__ = {
+        "comment": "One run of the answer-quality eval (python -m app.evals.answers): scores per question and "
+        "averages, with the settings it ran with, so two versions can be compared."
+    }
+
+    id: Mapped[int] = mapped_column(primary_key=True)
+    created_at: Mapped[datetime] = mapped_column(DateTime(timezone=True), server_default=func.now(), index=True)
+    kind: Mapped[str] = mapped_column(String(20), default="answers")
+    label: Mapped[str | None] = mapped_column(String(80), comment="What changed, e.g. 'chunk 600' or a git commit")
+    config: Mapped[dict] = mapped_column(JSON, default=dict, comment="Model, judge, chunking and retrieval settings")
+    summary: Mapped[dict] = mapped_column(JSON, default=dict, comment="Average of each metric")
+    items: Mapped[list] = mapped_column(JSON, default=list, comment="Scores per question")
+    cost_usd: Mapped[float] = mapped_column(Float, default=0.0)

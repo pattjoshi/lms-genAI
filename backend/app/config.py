@@ -138,12 +138,24 @@ class Settings(BaseSettings):
     sql_agent_answer_rows: int = 30  # rows shown to the LLM to write the answer (the UI gets them all)
     sql_agent_max_output_tokens: int = 700
 
+    # --- Guardrails, evaluation, dashboards (Phase 7) ---
+    guardrails: bool = True  # check chat messages for prompt injection and off-topic questions before answering
+    # A message at least this similar (cosine) to a course topic or a known kind of request is on topic
+    # without asking the LLM. Below it, a small LLM classifier decides (rules always run first).
+    guard_on_topic_similarity: float = 0.40
+    guard_max_output_tokens: int = 80
+    # The model that grades answers in the eval. Empty = OPENAI_CHAT_MODEL (cheapest, but a model tends to
+    # like its own answers: "self-preference bias"). Cost is estimated at the chat model's prices.
+    eval_judge_model: str | None = None
+    eval_max_output_tokens: int = 700
+    eval_better_margin: float = 0.02  # a score must move more than this to count as better or worse
+
     # --- Langfuse (tracing) ---
     langfuse_public_key: str | None = None
     langfuse_secret_key: SecretStr | None = None
     langfuse_base_url: str = "https://us.cloud.langfuse.com"
 
-    @field_validator("openai_base_url", mode="before")
+    @field_validator("openai_base_url", "eval_judge_model", mode="before")
     @classmethod
     def _empty_url_is_none(cls, value):
         return value or None

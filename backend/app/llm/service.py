@@ -58,7 +58,10 @@ def _require_key(settings: Settings) -> None:
         )
 
 
-def build_chat_model(settings: Settings, max_tokens: int | None = None, streaming: bool = False) -> ChatOpenAI:
+def build_chat_model(
+    settings: Settings, max_tokens: int | None = None, streaming: bool = False, model: str | None = None
+) -> ChatOpenAI:
+    """`model` overrides OPENAI_CHAT_MODEL for one call (Phase 7: the eval's judge)."""
     _require_key(settings)
     kwargs = {}
     if streaming:
@@ -66,7 +69,7 @@ def build_chat_model(settings: Settings, max_tokens: int | None = None, streamin
     if settings.openai_temperature is not None:
         kwargs["temperature"] = settings.openai_temperature
     return ChatOpenAI(
-        model=settings.openai_chat_model,
+        model=model or settings.openai_chat_model,
         api_key=settings.openai_api_key,
         base_url=settings.openai_base_url,
         timeout=settings.llm_timeout_seconds,
@@ -101,6 +104,7 @@ async def chat_structured[T: BaseModel](
     feature: str,
     user: User | None,
     max_tokens: int | None = None,
+    model: str | None = None,
 ) -> tuple[T, LLMResult]:
     """Like chat(), but the answer is an object of `schema` instead of free text (Phase 3).
 
@@ -108,11 +112,16 @@ async def chat_structured[T: BaseModel](
     the JSON schema generated from the pydantic class, so the JSON always parses and has
     every field. It does NOT make the content correct: callers still check the values
     (e.g. that a quoted sentence really is in the source text).
+
+    `model` (Phase 7) runs this one call on another model, e.g. a stronger judge for the eval.
+    Its cost is estimated with the chat model's prices.
     """
-    model = build_chat_model(get_settings(), max_tokens).with_structured_output(
+    runnable = build_chat_model(get_settings(), max_tokens, model=model).with_structured_output(
         schema, method="json_schema", strict=True, include_raw=True
     )
-    out, result = await _invoke(session, model, messages, feature, user, None, raw=lambda r: r["raw"])
+    out, result = await _invoke(
+        session, runnable, messages, feature, user, None, raw=lambda r: r["raw"], model_name=model
+    )
     if out["parsed"] is None:
         # Only happens when the output was cut off (max_tokens) or the model refused.
         raise LLMUnavailableError(
@@ -143,10 +152,11 @@ async def chat_with_tools(
     return response, result
 
 
-async def _invoke(session, runnable, messages, feature, user, session_id, *, raw) -> tuple:
+async def _invoke(session, runnable, messages, feature, user, session_id, *, raw, model_name=None) -> tuple:
     """Steps 1-5 of the module docstring around one call. `raw(response)` returns the
     AIMessage, which carries the token usage."""
     settings = get_settings()
+    model_name = model_name or settings.openai_chat_model
     openai_breaker.before_call()
     await ensure_budget_available(session, settings)
 
@@ -170,7 +180,7 @@ async def _invoke(session, runnable, messages, feature, user, session_id, *, raw
             session,
             user_id=user.id if user else None,
             feature=feature,
-            model=settings.openai_chat_model,
+            model=model_name,
             latency_ms=int((time.perf_counter() - started) * 1000),
             attempts=err.attempts,
             status="error",
@@ -188,7 +198,7 @@ async def _invoke(session, runnable, messages, feature, user, session_id, *, raw
         session,
         user_id=user.id if user else None,
         feature=feature,
-        model=settings.openai_chat_model,
+        model=model_name,
         input_tokens=input_tokens,
         output_tokens=output_tokens,
         cost_usd=cost,
@@ -198,7 +208,7 @@ async def _invoke(session, runnable, messages, feature, user, session_id, *, raw
     )
     return response, LLMResult(
         text="",
-        model=settings.openai_chat_model,
+        model=model_name,
         input_tokens=input_tokens,
         output_tokens=output_tokens,
         cost_usd=cost,

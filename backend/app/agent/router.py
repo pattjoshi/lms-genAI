@@ -103,7 +103,9 @@ async def _llm_route(session: AsyncSession, user: User, text: str) -> tuple[Rout
 # ---------------------------------------------------------------------------
 
 
-async def route(session: AsyncSession, user: User, text: str) -> Route:
+async def route(session: AsyncSession, user: User, text: str, vector: list[float] | None = None) -> Route:
+    """`vector`: the message's embedding when the input guardrail already made it (Phase 7), so the
+    message is embedded once per chat turn."""
     s = get_settings()
     topic = extract_topic(text)
 
@@ -116,11 +118,11 @@ async def route(session: AsyncSession, user: User, text: str) -> Route:
     # 2. Embeddings
     cost = 0.0
     if not (hit and hit.intent in NEEDS_TOPIC):
-        embedded = await embed_texts(session, [text], feature="route_embed", user=user)
-        cost += embedded.cost_usd
-        intent, scores = nearest_intent(
-            embedded.vectors[0], await _examples(session), s.route_min_similarity, s.route_min_margin
-        )
+        if vector is None:
+            embedded = await embed_texts(session, [text], feature="route_embed", user=user)
+            cost += embedded.cost_usd
+            vector = embedded.vectors[0]
+        intent, scores = nearest_intent(vector, await _examples(session), s.route_min_similarity, s.route_min_margin)
         if intent is not None and (intent not in NEEDS_TOPIC or topic):
             return Route(intent, "embedding", scores[intent], topic, {"scores": scores}, cost)
         detail = {"scores": scores}

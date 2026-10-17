@@ -62,6 +62,12 @@ UPGRADES = [
     "ALTER TABLE doubts ADD COLUMN IF NOT EXISTS question_vec JSON",
     # Phase 6: the new sql_queries table is created by create_all; the agent's database user and
     # row-level security are set up by app/sql_agent/access.py below
+    # Phase 7: guardrails and tracing (new tables guardrail_events and eval_runs are created by create_all)
+    "ALTER TABLE doubts ADD COLUMN IF NOT EXISTS checks JSON",
+    "ALTER TABLE doubts ADD COLUMN IF NOT EXISTS first_token_ms INTEGER",
+    "ALTER TABLE doubts ADD COLUMN IF NOT EXISTS trace_id VARCHAR(64)",
+    "ALTER TABLE llm_usage ADD COLUMN IF NOT EXISTS trace_id VARCHAR(64)",
+    "CREATE INDEX IF NOT EXISTS ix_llm_usage_created_at ON llm_usage (created_at)",
 ]
 
 

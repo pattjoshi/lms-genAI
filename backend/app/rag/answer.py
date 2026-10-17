@@ -2,14 +2,21 @@
 
 The chat's doubt node streams tokens to the browser; an MCP client wants one result with the answer
 and its sources. Both build the SAME prompt here, so a fix to the prompt reaches both.
+
+Phase 7: `answer()` runs the same guardrails as the chat (app/guardrails/): the input check before
+retrieval, and the output checks after the answer, which here can still replace a leaking answer.
 """
 
 from langchain_core.messages import BaseMessage, HumanMessage, SystemMessage
 from sqlalchemy.ext.asyncio import AsyncSession
 
 from app.config import get_settings
+from app.guardrails import log as guard_log
+from app.guardrails.input import check_input
+from app.guardrails.output import BLOCKING, check_answer
 from app.llm.service import chat
 from app.models import User
+from app.prompts.guardrail import OUTPUT_BLOCKED_REPLY
 from app.prompts.rag_answer import NO_ANSWER, RAG_MEMORY, RAG_SYSTEM, RAG_USER, RAG_USER_REWRITTEN, format_excerpt
 from app.rag.retriever import Retrieval, retrieve
 
@@ -65,11 +72,24 @@ async def answer(
     course_ids: list[int] | None = None,
     weak: list[str] | None = None,
     feature: str = "rag_answer",
+    surface: str = "mcp",
 ) -> dict:
-    """Retrieve, then answer in one LLM call (no streaming). No relevant source = no LLM call."""
+    """Guardrail, retrieve, then answer in one LLM call (no streaming). No relevant source = no LLM call."""
+    verdict = await check_input(session, user, question)
+    if not verdict.allowed:
+        session.add(guard_log.input_event(user, question, verdict, surface))
+        await session.commit()
+        return {
+            "answer": verdict.reply,
+            "sources": [],
+            "confidence": None,
+            "blocked": verdict.kind,
+            "cost_usd": round(verdict.cost_usd, 6),
+        }
     retrieval = await retrieve(session, user, question, course_ids=course_ids)
     if not retrieval.has_context:
-        return {"answer": NO_ANSWER, "sources": [], "confidence": None, "cost_usd": round(retrieval.cost_usd, 6)}
+        cost = retrieval.cost_usd + verdict.cost_usd
+        return {"answer": NO_ANSWER, "sources": [], "confidence": None, "cost_usd": round(cost, 6)}
     result = await chat(
         session,
         messages=rag_messages(user, question, retrieval, weak),
@@ -77,9 +97,16 @@ async def answer(
         user=user,
         max_tokens=get_settings().rag_max_output_tokens,
     )
+    sources = cited(retrieval)
+    checks = check_answer(result.text, len(sources), user.email)
+    blocked = bool(BLOCKING & set(checks["flags"]))
+    if checks["flags"]:
+        session.add_all(guard_log.output_events(user, result.text, checks, surface, blocked=blocked))
+        await session.commit()
     return {
-        "answer": result.text,
-        "sources": cited(retrieval),
+        "answer": OUTPUT_BLOCKED_REPLY if blocked else result.text,
+        "sources": [] if blocked else sources,
         "confidence": confidence(retrieval.relevance()),
-        "cost_usd": round(result.cost_usd + retrieval.cost_usd, 6),
+        "checks": checks,
+        "cost_usd": round(result.cost_usd + retrieval.cost_usd + verdict.cost_usd, 6),
     }
