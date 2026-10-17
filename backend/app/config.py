@@ -6,6 +6,7 @@ Change models, prices and limits in `.env` — never in code.
 
 from functools import lru_cache
 from pathlib import Path
+from typing import Literal
 
 from pydantic import SecretStr, field_validator
 from pydantic_settings import BaseSettings, SettingsConfigDict
@@ -150,12 +151,29 @@ class Settings(BaseSettings):
     eval_max_output_tokens: int = 700
     eval_better_margin: float = 0.02  # a score must move more than this to count as better or worse
 
+    # --- Sign-in and sessions ---
+    # After logging in, the browser holds a random session id in an httpOnly cookie; the database keeps
+    # only its SHA-256 hash (app/accounts/sessions.py), so logging out or deactivating a user ends it at once.
+    auth_session_days: int = 7
+    auth_cookie_name: str = "lms_session"
+    auth_cookie_secure: bool = False  # true when the site is served over https (production)
+    # "lax" works when the frontend and backend share a site (localhost:3000 + localhost:8000, or
+    # app.example.com + api.example.com). Different sites need "none" (and AUTH_COOKIE_SECURE=true).
+    auth_cookie_samesite: Literal["lax", "strict", "none"] = "lax"
+    auth_signup_open: bool = True  # anyone may create a student account; staff roles are given by an admin
+    auth_max_failed_logins: int = 5  # wrong passwords for one email before it is locked for a while
+    auth_lockout_minutes: int = 15
+    # The old "pick a user" login for the seeded demo users. Only ever works when APP_ENV=dev.
+    auth_demo_login: bool = True
+    # Google sign-in: an OAuth "Web application" client id from Google Cloud Console. Empty = no Google button.
+    google_client_id: str | None = None
+
     # --- Langfuse (tracing) ---
     langfuse_public_key: str | None = None
     langfuse_secret_key: SecretStr | None = None
     langfuse_base_url: str = "https://us.cloud.langfuse.com"
 
-    @field_validator("openai_base_url", "eval_judge_model", mode="before")
+    @field_validator("openai_base_url", "eval_judge_model", "google_client_id", mode="before")
     @classmethod
     def _empty_url_is_none(cls, value):
         return value or None

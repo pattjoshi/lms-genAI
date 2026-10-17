@@ -1,9 +1,7 @@
 // Read a Server-Sent Events stream from a POST request.
-// (The browser's EventSource only supports GET and can't send our X-User-Id header,
-// so we read the response body stream ourselves.)
+// (The browser's EventSource only supports GET, so we read the response body stream ourselves.)
 
 import { API_URL, ApiError } from "./api";
-import { getUser } from "./session";
 
 export async function streamSSE(
   path: string,
@@ -11,12 +9,12 @@ export async function streamSSE(
   onEvent: (event: string, data: any) => void,
   signal?: AbortSignal,
 ): Promise<void> {
-  const user = getUser();
   let res: Response;
   try {
     res = await fetch(`${API_URL}${path}`, {
       method: "POST",
-      headers: { "Content-Type": "application/json", ...(user ? { "X-User-Id": String(user.id) } : {}) },
+      headers: { "Content-Type": "application/json" },
+      credentials: "include", // the session cookie
       body: JSON.stringify(body),
       signal,
     });

@@ -2,17 +2,19 @@
 
 // Layout + role guard for every portal: sidebar (desktop) / slide-in menu (mobile),
 // top bar with page title and theme toggle, and the roadmap card at the bottom.
-// The role check here is only UX: the backend enforces roles on every request.
+// The guard here is only UX (who sees which screens): the backend checks the session cookie and the
+// role on every request. Not logged in -> /login?next=<this page>; another role -> their own portal.
 
 import { GraduationCap, LogOut, Menu, X } from "lucide-react";
 import Link from "next/link";
 import { usePathname, useRouter } from "next/navigation";
 import { useEffect, useState, type ReactNode } from "react";
 
+import { UNAUTHORIZED_EVENT } from "@/lib/api";
 import { CURRENT_PHASE, NAV, ROADMAP } from "@/lib/features";
-import { clearUser, getUser, type Role, type SessionUser } from "@/lib/session";
+import { fetchMe, getUser, logout as endSession, type Role, type SessionUser } from "@/lib/session";
 import { ThemeToggle } from "./ThemeToggle";
-import { Avatar, Card, ROLE_STYLE } from "./ui";
+import { Alert, Avatar, Card, ROLE_STYLE, Skeleton } from "./ui";
 
 const TITLES: Record<Role, string> = {
   student: "Student portal",
@@ -103,19 +105,51 @@ export function PortalShell({
   children: (user: SessionUser) => ReactNode;
 }) {
   const router = useRouter();
+  const pathname = usePathname();
   const [user, setUserState] = useState<SessionUser | null>(null);
+  const [checkError, setCheckError] = useState<string | null>(null);
   const [menuOpen, setMenuOpen] = useState(false);
 
   useEffect(() => {
-    const current = getUser();
-    if (!current || current.role !== role) router.replace("/");
-    else setUserState(current);
+    const toLogin = () => router.replace(`/login?next=${encodeURIComponent(window.location.pathname)}`);
+    // Show the cached user at once (no blank page), then confirm with the backend.
+    const cached = getUser();
+    if (cached?.role === role) setUserState(cached);
+    let cancelled = false;
+    fetchMe()
+      .then((me) => {
+        if (cancelled) return;
+        if (!me) toLogin();
+        else if (me.role !== role) router.replace(`/${me.role}`);
+        else setUserState(me);
+      })
+      .catch((e) => !cancelled && setCheckError(e instanceof Error ? e.message : String(e)));
+    window.addEventListener(UNAUTHORIZED_EVENT, toLogin);
+    return () => {
+      cancelled = true;
+      window.removeEventListener(UNAUTHORIZED_EVENT, toLogin);
+    };
   }, [role, router]);
 
-  if (!user) return null;
+  useEffect(() => setMenuOpen(false), [pathname]);
 
-  const logout = () => {
-    clearUser();
+  if (checkError && !user) {
+    return (
+      <main className="mx-auto max-w-lg px-4 py-16">
+        <Alert title={checkError} />
+      </main>
+    );
+  }
+  if (!user) {
+    return (
+      <div className="flex min-h-screen items-center justify-center" aria-busy="true" aria-label="Checking your login">
+        <Skeleton className="h-10 w-48 rounded-xl" />
+      </div>
+    );
+  }
+
+  const logout = async () => {
+    await endSession().catch(() => undefined);
     router.replace("/");
   };
 

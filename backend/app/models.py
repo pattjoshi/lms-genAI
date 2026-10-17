@@ -236,9 +236,40 @@ class LoginEvent(Base):
     occurred_at: Mapped[datetime] = mapped_column(DateTime(timezone=True))
     success: Mapped[bool] = mapped_column(Boolean)
     failure_reason: Mapped[str | None] = mapped_column(
-        String(40), comment="wrong_password | account_locked | otp_expired; null on success"
+        String(40), comment="wrong_password | account_locked | otp_expired | google_failed; null on success"
     )
     device: Mapped[str] = mapped_column(String(20), comment="web | android | ios")
+
+
+class UserCredential(Base):
+    __tablename__ = "user_credentials"
+    __table_args__ = {
+        "comment": "How a user signs in: password hash and/or linked Google account. Kept out of the users "
+        "table so the SQL agent (which may read users) never gets a grant on it."
+    }
+
+    user_id: Mapped[int] = mapped_column(ForeignKey("users.id", ondelete="CASCADE"), primary_key=True)
+    password_hash: Mapped[str | None] = mapped_column(
+        String(255), comment="scrypt$n$r$p$salt$hash; null = no password (Google only, or a seeded demo user)"
+    )
+    google_sub: Mapped[str | None] = mapped_column(String(64), unique=True, comment="Google's stable account id")
+    password_changed_at: Mapped[datetime | None] = mapped_column(DateTime(timezone=True))
+    last_login_at: Mapped[datetime | None] = mapped_column(DateTime(timezone=True))
+    created_at: Mapped[datetime] = mapped_column(DateTime(timezone=True), server_default=func.now())
+
+
+class AuthSession(Base):
+    __tablename__ = "auth_sessions"
+    __table_args__ = {"comment": "A signed-in browser. The cookie holds a random id; only its SHA-256 is stored."}
+
+    id: Mapped[int] = mapped_column(primary_key=True)
+    user_id: Mapped[int] = mapped_column(ForeignKey("users.id", ondelete="CASCADE"), index=True)
+    token_hash: Mapped[str] = mapped_column(String(64), unique=True)
+    method: Mapped[str] = mapped_column(String(20), comment="password | google | demo | signup")
+    user_agent: Mapped[str | None] = mapped_column(String(200))
+    created_at: Mapped[datetime] = mapped_column(DateTime(timezone=True), server_default=func.now())
+    expires_at: Mapped[datetime] = mapped_column(DateTime(timezone=True))
+    revoked_at: Mapped[datetime | None] = mapped_column(DateTime(timezone=True))
 
 
 class LLMUsage(Base):

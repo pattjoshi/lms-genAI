@@ -1,32 +1,32 @@
-"""Dummy login.
+"""Who is calling: the signed-in user behind the session cookie.
 
-There are no passwords or tokens on purpose (this project is about GenAI, not auth).
-The frontend sends the chosen user's id in the `X-User-Id` header and we trust it.
-
-Everything that needs "who is calling" depends on `get_current_user`, so switching
-to real JWT auth later means changing only this file.
+The cookie holds a random session id (app/accounts/sessions.py); a missing, expired or revoked
+session, or a deactivated user, is a 401. Everything that needs "who is calling" depends on
+`get_current_user`, and `require_roles` guards whole routes by role. What each role may then SEE is
+decided by the permission matrix (app/permissions.py), not here.
 """
 
 from typing import Annotated
 
-from fastapi import Depends, Header, HTTPException, status
+from fastapi import Depends, HTTPException, Request, status
 from sqlalchemy.ext.asyncio import AsyncSession
 
+from app.accounts import sessions
+from app.config import get_settings
 from app.db import get_session
 from app.models import Role, User
 
 SessionDep = Annotated[AsyncSession, Depends(get_session)]
 
 
-async def get_current_user(
-    session: SessionDep,
-    x_user_id: Annotated[int | None, Header()] = None,
-) -> User:
-    if x_user_id is None:
-        raise HTTPException(status.HTTP_401_UNAUTHORIZED, "Not logged in. Pick a user on the login page.")
-    user = await session.get(User, x_user_id)
-    if user is None or not user.is_active:
-        raise HTTPException(status.HTTP_401_UNAUTHORIZED, "Unknown or inactive user. Log in again.")
+def session_token(request: Request) -> str | None:
+    return request.cookies.get(get_settings().auth_cookie_name)
+
+
+async def get_current_user(request: Request, session: SessionDep) -> User:
+    user = await sessions.user_for(session, session_token(request))
+    if user is None:
+        raise HTTPException(status.HTTP_401_UNAUTHORIZED, "You are not logged in, or your session has ended.")
     return user
 
 
