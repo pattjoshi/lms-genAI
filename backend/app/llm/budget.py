@@ -20,7 +20,7 @@ from sqlalchemy.ext.asyncio import AsyncSession
 from app.config import Settings
 from app.llm.errors import DailyBudgetExceededError
 from app.llm.tracing import current_trace_id
-from app.models import LLMUsage
+from app.models import LLMUsage, Role, User
 
 log = logging.getLogger(__name__)
 
@@ -47,7 +47,16 @@ async def spent_today_usd(session: AsyncSession, settings: Settings) -> float:
     return float(total or 0.0)
 
 
-async def ensure_budget_available(session: AsyncSession, settings: Settings) -> None:
+async def user_spent_today_usd(session: AsyncSession, settings: Settings, user_id: int) -> float:
+    total = await session.scalar(
+        select(func.coalesce(func.sum(LLMUsage.cost_usd), 0.0)).where(
+            LLMUsage.user_id == user_id, LLMUsage.created_at >= start_of_today(settings)
+        )
+    )
+    return float(total or 0.0)
+
+
+async def ensure_budget_available(session: AsyncSession, settings: Settings, user: User | None = None) -> None:
     spent = await spent_today_usd(session, settings)
     if spent >= settings.daily_budget_usd:
         raise DailyBudgetExceededError(
@@ -55,6 +64,15 @@ async def ensure_budget_available(session: AsyncSession, settings: Settings) -> 
             "It resets at midnight, or raise DAILY_BUDGET_USD in .env.",
             code="daily_budget_reached",
         )
+    # Per student: one account can't spend the shared budget. Staff accounts are created by an admin.
+    if user is not None and user.role == Role.student and settings.student_daily_budget_usd > 0:
+        mine = await user_spent_today_usd(session, settings, user.id)
+        if mine >= settings.student_daily_budget_usd:
+            raise DailyBudgetExceededError(
+                "You've used today's AI allowance. It resets at midnight.",
+                code="user_budget_reached",
+                detail=f"${mine:.4f} of STUDENT_DAILY_BUDGET_USD ${settings.student_daily_budget_usd:.2f}",
+            )
 
 
 async def record_usage(session: AsyncSession, **fields) -> None:

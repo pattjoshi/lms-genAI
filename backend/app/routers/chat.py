@@ -42,6 +42,7 @@ from app.agent.graph import agent, previous_turns
 from app.auth import CurrentUser, SessionDep
 from app.config import get_settings
 from app.db import SessionLocal
+from app.llm import user_limits
 from app.llm.errors import LLMError
 from app.llm.tracing import current_trace_id, trace
 from app.models import Course, Doubt, Module, Ticket, User
@@ -66,7 +67,8 @@ def sse(event: str, data: dict) -> str:
 
 
 @router.post("/ask")
-async def ask(body: AskIn, user: CurrentUser):
+async def ask(body: AskIn, user: CurrentUser, session: SessionDep):
+    await user_limits.check_and_record(session, user, "chat")  # 429 before the stream starts
     question = body.question.strip()
     # The request's DB session closes when this function returns, but the stream keeps
     # running, so the generator opens its own session.

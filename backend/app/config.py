@@ -65,7 +65,11 @@ class Settings(BaseSettings):
     circuit_breaker_cooldown_seconds: float = 60.0
 
     # --- Cost guard ---
-    daily_budget_usd: float = 1.0
+    daily_budget_usd: float = 1.0  # everyone together: the last safety net
+    # Per person, so one account (or a script behind one) can't use up the day for everyone. 0 = off.
+    ai_requests_per_minute: int = 10  # chat messages, data questions and /ai/hello per user per minute
+    ai_requests_per_day: int = 200  # ...and per user per day (resets at midnight in APP_TIMEZONE)
+    student_daily_budget_usd: float = 0.10  # AI spend per student per day; staff only have the shared budget
 
     # --- Phase 1: upload pipeline ---
     upload_dir: Path = BACKEND_DIR / "storage" / "uploads"

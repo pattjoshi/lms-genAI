@@ -14,6 +14,7 @@ from sqlalchemy import (
     Enum,
     Float,
     ForeignKey,
+    Index,
     Integer,
     String,
     Text,
@@ -291,6 +292,19 @@ class LLMUsage(Base):
     status: Mapped[str] = mapped_column(String(20), comment="success | error")
     error_code: Mapped[str | None] = mapped_column(String(60))
     trace_id: Mapped[str | None] = mapped_column(String(64), comment="Langfuse trace of the request (Phase 7)")
+
+
+class AiRequest(Base):
+    """One row per AI request a person makes (a chat message, a data question). Counted by the per-user
+    rate limit in app/llm/user_limits.py; kept in Postgres so every server process sees the same count."""
+
+    __tablename__ = "ai_requests"
+    __table_args__ = (Index("ix_ai_requests_user_created", "user_id", "created_at"),)
+
+    id: Mapped[int] = mapped_column(primary_key=True)
+    user_id: Mapped[int] = mapped_column(ForeignKey("users.id", ondelete="CASCADE"))
+    kind: Mapped[str] = mapped_column(String(20), comment="chat | sql | hello")
+    created_at: Mapped[datetime] = mapped_column(DateTime(timezone=True))
 
 
 # ---------------------------------------------------------------------------
