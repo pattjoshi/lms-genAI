@@ -6,6 +6,26 @@ guardrails and tracing.
 
 <img width="935" height="438" alt="image" src="https://github.com/user-attachments/assets/4638e2e2-9b42-45cc-8766-cfded949bedb" />
 
+https://github.com/user-attachments/assets/7d7038ec-26ce-4ebc-a7e2-05d01fadfe55
+
+
+https://github.com/user-attachments/assets/b9db6fd7-808a-4274-b7c5-71baa20ffc41
+
+https://github.com/user-attachments/assets/1e28ec5e-ebc8-48c0-b9f5-5d774ceb23a1
+
+
+
+https://github.com/user-attachments/assets/3d49ea04-f0f3-4136-9043-e282f682a83b
+
+
+
+
+
+
+
+
+
+
 
 - What we're building and why: [PLAN.md](PLAN.md)
 - How it all fits together (architecture diagrams): [System design](#system-design)
